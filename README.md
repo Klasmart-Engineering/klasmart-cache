@@ -209,7 +209,9 @@ IQuerier为查询接口，其函数说明如下：
 | UnmarshalObject | 解析Object的json格式                             |
 | ID              | 返回Object的ID                                   |
 
-	最后，在查询数据时，使用CacheEngine进行查询，CacheEngine定义如下：
+
+最后，在查询数据时，使用CacheEngine进行查询，CacheEngine定义如下：
+
 ```go
 type ICacheEngine interface {
 	Query(ctx context.Context, querierName string, condition dbo.Conditions, result *[]Object) error
@@ -218,7 +220,7 @@ type ICacheEngine interface {
 	AddQuerier(ctx context.Context, querier IQuerier)
 }
 ```
-	其中AddQuerier在系统启动时，将所有Querier加入引擎中。
+其中AddQuerier在系统启动时，将所有Querier加入引擎中。
 
 | **函数名** | **说明**                         |
 | ---------- | -------------------------------- |
@@ -226,4 +228,4 @@ type ICacheEngine interface {
 | Clean      | 清楚缓存（更新和删除数据时调用） |
 | AddQuerier | 系统添加Querier                  |
 
-​	
+
