@@ -66,8 +66,11 @@ kl-cache中缓存失效的时间默认为**5分钟**，失效缓存我们采用*
 ### 关联缓存失效问题
 为了防止关联数据失效，我们必须记录数据之间的关联关系。否则，当关联数据失效，而查询数据未失效的情况下，会出现缓存错误的问题。
 如下图所示，在DataA中包含DataB和DataC的id，当我们缓存DataA时，我们会缓存DataB和DataC的数据。
+
 ![double-delete-第 1 页.png](./docs/img/img6.png)
+
 当DataB发生变化时，缓存中的DataB并没有更新，造成数据错误。
+
 ![double-delete-第 2 页.png](./docs/img/img7.png)
 
 ### 缓存存储策略
@@ -94,6 +97,7 @@ kl-cache中缓存失效的时间默认为**5分钟**，失效缓存我们采用*
 对于某些高频访问的数据，我们可以采用多阶梯缓存策略，本地缓存直接保存在宿主机的内存中，本地内存仅保存最高频访问的数据，若命中本地缓存，直接返回，减少通信开销。
 若未命中本地缓存，则查询远程缓存（redis等），若远程缓存中存在，则直接返回。
 若远程缓存中不存在，则查询数据库。
+
 ![double-delete-第 5 页.png](./docs/img/img10.png)
 
 
@@ -129,7 +133,9 @@ kl-cache中缓存失效的时间默认为**5分钟**，失效缓存我们采用*
 ### 测试数据结构
 为了验证缓存效果,我们建立了一个测试数据库,并建立了5张表，分别为record_a，record_b，record_c，record_d和record_e。
 表结构如下所示：
+
 ![image.png](./docs/img/img12.png)
+
 从表结构中我们可以看到，表与表之间存在包含关系，record_a中包含record_b，record_c和record_d的记录，record_b表中包含record_d的记录，record_d中包含record_e的记录。
 因此，在查询record_a时，我们需要对record_b，record_c和record_d做关联查询，同理在查询record_b时，要对record_d做关联查询，查询record_d时要对record_e做关联查询。
 
