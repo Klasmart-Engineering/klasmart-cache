@@ -19,15 +19,10 @@ var (
 )
 
 const (
-	defaultExpire          = time.Minute * 10
-	defaultRefreshSize     = 10
-	defaultRefreshInterval = time.Second * 30
+	defaultExpire = time.Minute * 10
 
 	klcEntryPrefix   = "klc:cache:entry:"
 	klcRelatedPrefix = "klc:cache:related:"
-	klcRefreshPrefix = "klc:cache:refresh"
-
-	klcIDSeparator = "-"
 )
 
 type RelatedEntity struct {
@@ -50,38 +45,27 @@ type Object interface {
 type ICacheEngine interface {
 	Query(ctx context.Context, querierName string, condition dbo.Conditions, result *[]Object) error
 	Clean(ctx context.Context, querierName string, ids []string)
-	BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object, refresh bool) error
+	BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object) error
 
-	SetRefreshSize(ctx context.Context, refreshSize int64)
-	SetRefreshInterval(ctx context.Context, refreshInterval time.Duration)
 	SetExpire(ctx context.Context, duration time.Duration)
-
-	Start()
-	Stop()
 
 	AddQuerier(ctx context.Context, querier IQuerier)
 }
 type CacheEngine struct {
-	querierMap      map[string]IQuerier
-	expireTime      time.Duration
-	refreshSize     int64
-	refreshInterval time.Duration
-
-	start bool
+	querierMap map[string]IQuerier
+	expireTime time.Duration
 }
 
 func (c *CacheEngine) SetExpire(ctx context.Context, duration time.Duration) {
 	c.expireTime = duration
 }
-func (c *CacheEngine) SetRefreshSize(ctx context.Context, refreshSize int64) {
-	c.refreshSize = refreshSize
-}
-func (c *CacheEngine) SetRefreshInterval(ctx context.Context, refreshInterval time.Duration) {
-	c.refreshInterval = refreshInterval
-}
 
 func (c *CacheEngine) AddQuerier(ctx context.Context, querier IQuerier) {
 	c.querierMap[querier.ID()] = querier
+}
+
+func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object) error {
+	return c.doBatchGet(ctx, querierName, ids, result, 0)
 }
 
 func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []string) {
@@ -115,7 +99,78 @@ func (c *CacheEngine) Query(ctx context.Context, querierName string, condition d
 		return err
 	}
 
-	return c.BatchGet(ctx, querierName, ids, result, false)
+	return c.BatchGet(ctx, querierName, ids, result)
+}
+
+func (c *CacheEngine) fetchData(ctx context.Context,
+	querierName string,
+	ids []string,
+	result *[]Object) ([]Object, error) {
+	querier, exists := c.querierMap[querierName]
+	if !exists {
+		log.Error(ctx, "GetRedis failed",
+			log.String("querierName", querierName),
+			log.Any("querierMap", c.querierMap))
+		return nil, ErrUnknownQuerier
+	}
+	client, err := ro.GetRedis(ctx)
+	if err != nil {
+		log.Error(ctx, "GetRedis failed", log.Err(err))
+		return nil, err
+	}
+
+	//allocate space
+	*result = make([]Object, 0, len(ids))
+	//query from cache
+	missingIDs := ids
+	if len(ids) > 0 {
+		missingIDs, err = c.queryForCache(ctx, querier, client, ids, result)
+		if err != nil {
+			log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
+			return nil, err
+		}
+	}
+	//all in cache
+	if len(missingIDs) < 1 {
+		log.Info(ctx, "All in cache")
+		return nil, nil
+	} else if len(missingIDs) == len(ids) {
+		log.Info(ctx, "All missing cache")
+	} else {
+		log.Info(ctx, "Parts in cache")
+	}
+	//query from database
+	missingObjs, err := c.batchGetFromDB(ctx, querier, missingIDs)
+	if err != nil {
+		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
+		return nil, err
+	}
+	*result = append(*result, missingObjs...)
+
+	*result = c.resort(ctx, ids, *result)
+
+	return missingObjs, nil
+}
+
+func (c *CacheEngine) doBatchGet(ctx context.Context, querierName string, ids []string, result *[]Object, expireTime time.Duration) error {
+	querier, exists := c.querierMap[querierName]
+	if !exists {
+		log.Error(ctx, "GetRedis failed",
+			log.String("querierName", querierName),
+			log.Any("querierMap", c.querierMap))
+		return ErrUnknownQuerier
+	}
+	client, err := ro.GetRedis(ctx)
+	if err != nil {
+		log.Error(ctx, "GetRedis failed", log.Err(err))
+		return err
+	}
+
+	missingObjs, err := c.fetchData(ctx, querierName, ids, result)
+
+	//save cache
+	go c.saveCache(ctx, querier, client, missingObjs, expireTime)
+	return nil
 }
 
 func (c *CacheEngine) resort(ctx context.Context, ids []string, result []Object) []Object {
@@ -150,7 +205,7 @@ func (c *CacheEngine) doClean(ctx context.Context, querierName string, ids []str
 		return err
 	}
 	if len(ids) > 0 {
-		err = client.Del(c.KeyList(querier.ID(), ids, c.IDKey)...).Err()
+		err = client.Del(c.keyList(querier.ID(), ids, c.IDKey)...).Err()
 		if err != nil {
 			log.Error(ctx, "Del ids failed", log.Err(err), log.Strings("ids", ids))
 			return err
@@ -166,7 +221,7 @@ func (c *CacheEngine) doClean(ctx context.Context, querierName string, ids []str
 	return nil
 }
 
-func (c *CacheEngine) KeyList(prefix string, ids []string, idMap func(prefix string, id string) string) []string {
+func (c *CacheEngine) keyList(prefix string, ids []string, idMap func(prefix string, id string) string) []string {
 	keys := make([]string, len(ids))
 	for i := range ids {
 		keys[i] = idMap(prefix, ids[i])
@@ -187,7 +242,7 @@ func (c *CacheEngine) doubleDelete(ctx context.Context, deleteFunc func()) {
 }
 func (c *CacheEngine) cleanRelatedIDs(ctx context.Context, client *redis.Client, querier IQuerier, ids []string) error {
 	//Query related cache
-	keyList := c.KeyList(querier.ID(), ids, c.RelatedIDKey)
+	keyList := c.keyList(querier.ID(), ids, c.RelatedIDKey)
 
 	cacheRelatedRes := make([]string, 0)
 	for i := range keyList {
@@ -258,7 +313,7 @@ func (c *CacheEngine) queryForCache(ctx context.Context,
 	ids []string,
 	result *[]Object) ([]string, error) {
 	missingIDs := make([]string, 0, len(ids))
-	cacheRes, err := client.MGet(c.KeyList(querier.ID(), ids, c.IDKey)...).Result()
+	cacheRes, err := client.MGet(c.keyList(querier.ID(), ids, c.IDKey)...).Result()
 	if err == redis.Nil {
 		//handle nil
 		fmt.Println("Nil")
@@ -345,13 +400,18 @@ func (c *CacheEngine) handleRelatedEntity(ctx context.Context,
 func (c *CacheEngine) saveCache(ctx context.Context,
 	querier IQuerier,
 	client *redis.Client,
-	missingObjs []Object) {
+	missingObjs []Object,
+	expireTime time.Duration) {
 	//save cache
 	cachePairs := make([]interface{}, len(missingObjs)*2)
 	relatedRecords := make([]*ObjectRelatedIDs, 0)
 
 	//get Expire
-	expireAt := time.Now().Add(c.expireTime)
+	now := time.Now()
+	expireAt := now.Add(c.expireTime)
+	if expireTime > 0 {
+		expireAt = now.Add(expireTime)
+	}
 
 	for i := range missingObjs {
 		jsonData, err := json.Marshal(missingObjs[i])
@@ -386,17 +446,15 @@ func (c *CacheEngine) containsInObjects(Octx context.Context, objs []Object, id 
 }
 
 var (
-	_cacheEngine     ICacheEngine
+	_cacheEngine     *CacheEngine
 	_cacheEngineOnce sync.Once
 )
 
-func GetCacheEngine() ICacheEngine {
+func GetCacheEngine() *CacheEngine {
 	_cacheEngineOnce.Do(func() {
 		_cacheEngine = &CacheEngine{
-			querierMap:      make(map[string]IQuerier),
-			expireTime:      defaultExpire,
-			refreshSize:     defaultRefreshSize,
-			refreshInterval: defaultRefreshInterval,
+			querierMap: make(map[string]IQuerier),
+			expireTime: defaultExpire,
 		}
 	})
 	return _cacheEngine
