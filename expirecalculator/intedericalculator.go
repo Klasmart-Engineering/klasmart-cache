@@ -25,12 +25,16 @@ func (f *IntegrateDerivativeTimeExpireCalculator) Calculate(ctx context.Context,
 
 	//if we need to decrease frequency
 	diff := newExpire - expire
+	inte0, inte1 := feedback.In()
+	amend := inte0
+	if diff > 0 {
+		amend = inte1
+	}
 	if diff != 0 {
-		_, inte1 := feedback.In()
-		if inte1 == 0 {
-			inte1 = 1
+		if amend == 0 {
+			amend = 1
 		}
-		diff = diff / float64(inte1)
+		diff = diff / float64(amend)
 		newExpire = expire + diff
 	}
 
@@ -41,10 +45,5 @@ func (f *IntegrateDerivativeTimeExpireCalculator) Calculate(ctx context.Context,
 		newExpire = newExpire - float64(adjust)
 	}
 
-	if newExpire < 10 {
-		newExpire = 10
-	} else if newExpire > 3600 {
-		newExpire = 600
-	}
 	return time.Duration(newExpire) * time.Second
 }

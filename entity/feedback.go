@@ -5,7 +5,10 @@ import (
 )
 
 const (
-	FeedbackRecordSize = 20
+	FeedbackRecordSize = 40
+
+	FeedbackUnchanged = 0
+	FeedbackChanged   = 1
 )
 
 type FeedbackEntry struct {

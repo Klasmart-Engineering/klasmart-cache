@@ -31,6 +31,9 @@ func (a RecordDEntity) RelatedIDs() []*cache.RelatedEntity {
 		},
 	}
 }
+func (a RecordDEntity) Equal(o cache.Object) bool {
+	return true
+}
 
 type RecordDQuerier struct {
 }

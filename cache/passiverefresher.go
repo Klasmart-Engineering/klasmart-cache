@@ -28,8 +28,19 @@ type idCache struct {
 	hitCache bool
 }
 type CacheExpire struct {
-	ID         string
-	ExpireTime int64
+	ID             string
+	ExpireAt       time.Time
+	ExpireDuration time.Duration
+}
+
+type expiredObject struct {
+	object      Object
+	expiredInfo *CacheExpire
+}
+
+type fetchObjectDataResponse struct {
+	dbObjects      map[string]Object
+	expiredObjects map[string]*expiredObject
 }
 
 type IPassiveRefresher interface {
@@ -70,7 +81,7 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 		return err
 	}
 
-	missingObjs, err := c.engine.fetchData(ctx, querierName, ids, result)
+	objs, err := c.fetchData(ctx, querier, client, ids, result)
 	if err != nil {
 		log.Error(ctx, "fetchData failed", log.Err(err),
 			log.Strings("ids", ids),
@@ -78,38 +89,142 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 		return err
 	}
 
-	if len(missingObjs) > 0 {
+	if len(objs.dbObjects) > 0 {
 		//save cache
-		go c.saveCache(ctx, querier, client, ids, missingObjs)
+		go c.saveCache(ctx, querier, client, ids, objs)
 	}
 
 	return nil
+}
+
+func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
+	client *redis.Client,
+	querierName string,
+	hitIDs []string,
+	result *[]Object) (map[string]*expiredObject, error) {
+	expiredInfo, err := c.fetchExpireTime(ctx, client, querierName, hitIDs)
+	if err != nil {
+		log.Error(ctx, "fetchExpireTime failed",
+			log.Err(err),
+			log.String("querierName", querierName),
+			log.Strings("hitIDs", hitIDs))
+		return nil, err
+	}
+	//build objects map
+	objMap := make(map[string]Object)
+	for i := range *result {
+		objMap[(*result)[i].StringID()] = (*result)[i]
+	}
+
+	expiredObjects := make(map[string]*expiredObject)
+	now := time.Now()
+	for i := range hitIDs {
+		exp, exists := expiredInfo[hitIDs[i]]
+		if (!exists) || now.After(exp.ExpireAt) {
+			//add expire
+			expiredObjects[hitIDs[i]] = &expiredObject{
+				object:      objMap[hitIDs[i]],
+				expiredInfo: exp,
+			}
+		}
+	}
+
+	return expiredObjects, nil
+}
+
+func (c *PassiveRefresher) fetchData(ctx context.Context,
+	querier IQuerier,
+	client *redis.Client,
+	ids []string,
+	result *[]Object) (*fetchObjectDataResponse, error) {
+
+	//allocate space
+	*result = make([]Object, 0, len(ids))
+	//query from cache
+	missingIDs := ids
+	hitIDs := make([]string, 0, len(ids))
+	var err error
+	if len(ids) > 0 {
+		hitIDs, missingIDs, err = c.engine.queryForCache(ctx, querier, client, ids, result)
+		if err != nil {
+			log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
+			return nil, err
+		}
+	}
+	//check hitIDs and add expiredIDs into missingIDs
+	expiredObjects, err := c.fetchExpiredData(ctx, client, querier.ID(), hitIDs, result)
+	if err != nil {
+		log.Error(ctx, "fetchExpiredData failed",
+			log.Err(err),
+			log.String("querier name", querier.ID()),
+			log.Strings("hitIDs", hitIDs))
+		return nil, err
+	}
+	for i := range expiredObjects {
+		if expiredObjects[i].object != nil {
+			missingIDs = append(missingIDs, expiredObjects[i].object.StringID())
+		}
+	}
+	log.Debug(ctx, "Expired ids",
+		log.Any("expired objs", expiredObjects))
+
+	//all in cache
+	if len(missingIDs) < 1 {
+		log.Info(ctx, "All in cache")
+		return &fetchObjectDataResponse{
+			dbObjects:      nil,
+			expiredObjects: expiredObjects,
+		}, nil
+	} else if len(missingIDs) == len(ids) {
+		log.Info(ctx, "All missing cache",
+			log.Strings("all ids", ids))
+	} else {
+		log.Info(ctx, "Parts in cache",
+			log.Strings("missing IDs", missingIDs),
+			log.Strings("all ids", ids))
+	}
+	//query from database
+	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs)
+	if err != nil {
+		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
+		return nil, err
+	}
+	*result = append(*result, missingObjs...)
+
+	*result = c.engine.resort(ctx, ids, *result)
+
+	dbObjects := make(map[string]Object)
+	for i := range missingObjs {
+		dbObjects[missingObjs[i].StringID()] = missingObjs[i]
+	}
+	return &fetchObjectDataResponse{
+		dbObjects:      dbObjects,
+		expiredObjects: expiredObjects,
+	}, nil
 }
 func (c *PassiveRefresher) saveCache(ctx context.Context,
 	querier IQuerier,
 	client *redis.Client,
 	ids []string,
-	missingObjs []Object) {
+	objs *fetchObjectDataResponse) {
 
 	// maybe needs mutex
-	idCaches, objMap := c.fetchObjects(ctx, ids, missingObjs)
-	feedbackEntities, err := c.fetchFeedback(ctx, querier.ID(), idCaches)
+	//idCaches, objMap := c.fetchObjects(ctx, ids, missingObjs)
+	feedbackEntities, err := c.fetchFeedback(ctx, querier.ID(), objs)
 	if err != nil {
 		log.Error(ctx, "failed to fetch expirecalculator",
 			log.Err(err),
 			log.String("querierName", querier.ID()),
-			log.Any("caches", idCaches))
+			log.Any("objs", objs))
 		return
 	}
 
 	//calculate expire time
-	feedbackRecord := make([]*entity.FeedbackRecordEntry, 0)
+	feedbackRecord := make([]*entity.FeedbackRecordEntry, len(feedbackEntities))
 	for i := range feedbackEntities {
 		expireTime := expirecalculator.GetExpireCalculator().Calculate(ctx, feedbackEntities[i])
-
 		//limit time
 		expireTime = c.expireLimit(expireTime)
-
 		feedbackRecord[i] = &entity.FeedbackRecordEntry{
 			ID:              feedbackEntities[i].ID,
 			QuerierName:     feedbackEntities[i].QuerierName,
@@ -117,7 +232,9 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 			ExpireTime:      expireTime,
 		}
 
-		c.engine.saveCache(ctx, querier, client, []Object{objMap[feedbackEntities[i].ID]}, expireTime)
+		if objs.dbObjects[feedbackEntities[i].ID] != nil {
+			c.engine.saveCache(ctx, querier, client, []Object{objs.dbObjects[feedbackEntities[i].ID]}, time.Duration(-1))
+		}
 	}
 
 	//save expirecalculator info
@@ -127,6 +244,7 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 func (c *PassiveRefresher) fetchObjects(ctx context.Context,
 	ids []string,
 	missingObjs []Object) ([]*idCache, map[string]Object) {
+
 	idCaches := make([]*idCache, len(ids))
 	objMap := make(map[string]Object)
 	for i := range missingObjs {
@@ -177,41 +295,38 @@ func (c *PassiveRefresher) saveFeedback(ctx context.Context, querierName string,
 		cleanKeyList = append(cleanKeyList, key)
 	}
 
-	//clean redis list
-	c.cleanRedisList(ctx, client, cleanKeyList)
-
 	//save expire
 	c.saveExpireTime(ctx, client, newFeedback)
+
+	//clean redis list
+	c.cleanRedisList(ctx, client, cleanKeyList)
 	return nil
 }
 
 func (c *PassiveRefresher) cleanRedisList(ctx context.Context, client *redis.Client, keys []string) {
-	go func() {
-		for i := range keys {
-			size, err := client.LLen(keys[i]).Result()
-			if err != nil {
-				log.Error(ctx, "LLen failed", log.Err(err))
-				return
-			}
-			cleanCount := int(size - entity.FeedbackRecordSize)
-			for i := 0; i < cleanCount; i++ {
-				client.LPop(keys[i])
+	//TODO: needs to lock
+	for i := range keys {
+		size, err := client.LLen(keys[i]).Result()
+		if err != nil {
+			log.Error(ctx, "LLen failed", log.Err(err))
+			return
+		}
+		cleanCount := int(size - entity.FeedbackRecordSize)
+		if cleanCount > entity.FeedbackRecordSize*10 {
+			for j := 0; j < cleanCount; j++ {
+				client.RPop(keys[i])
 			}
 		}
-	}()
+	}
 }
 
 func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 	querierName string,
-	idCaches []*idCache) ([]*entity.FeedbackEntry, error) {
+	objs *fetchObjectDataResponse) ([]*entity.FeedbackEntry, error) {
 	client, err := ro.GetRedis(ctx)
 	if err != nil {
 		log.Error(ctx, "GetRedis failed", log.Err(err))
 		return nil, err
-	}
-	ids := make([]string, len(idCaches))
-	for i := range idCaches {
-		ids[i] = idCaches[i].id
 	}
 
 	globalData, groupData, err := c.fetchGlobalGroupFeedback(ctx, client, querierName)
@@ -222,6 +337,12 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 		return nil, err
 	}
 
+	ids := make([]string, 0, len(objs.expiredObjects))
+	for id := range objs.expiredObjects {
+		ids = append(ids, id)
+	}
+
+	//expired data fetch feedback data
 	idDataMap, err := c.fetchIDFeedback(ctx, client, querierName, ids)
 	if err != nil {
 		log.Error(ctx, "fetchIDFeedback failed",
@@ -231,31 +352,47 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 		return nil, err
 	}
 
-	expireDataMap, err := c.fetchExpireTime(ctx, client, querierName, ids)
-	if err != nil {
-		log.Error(ctx, "fetchExpireTime failed",
-			log.String("querierName", querierName),
-			log.Strings("ids", ids),
-			log.Err(err))
-		return nil, err
-	}
-
-	result := make([]*entity.FeedbackEntry, len(idCaches))
-	for i := range idCaches {
-		currentFeedback := 0
-		if idCaches[i].hitCache {
-			currentFeedback = 1
+	now := time.Now()
+	result := make([]*entity.FeedbackEntry, 0, len(objs.dbObjects))
+	for _, obj := range objs.dbObjects {
+		expiredObj, exists := objs.expiredObjects[obj.StringID()]
+		if exists {
+			if expiredObj.expiredInfo == nil {
+				expiredObj.expiredInfo = &CacheExpire{
+					ID:             obj.StringID(),
+					ExpireAt:       now.Add(defaultExpire),
+					ExpireDuration: defaultExpire,
+				}
+			}
+			fbe := &entity.FeedbackEntry{
+				ID:              obj.StringID(),
+				QuerierName:     querierName,
+				CurrentFeedback: entity.FeedbackChanged,
+				RecentFeedback:  idDataMap[obj.StringID()],
+				GlobalFeedback:  globalData,
+				GroupFeedback:   groupData,
+				ExpireTime:      expiredObj.expiredInfo.ExpireDuration,
+			}
+			//unchanged
+			if expiredObj.object.Equal(obj) {
+				fbe.CurrentFeedback = entity.FeedbackUnchanged
+				uncheckedDuration := now.Sub(expiredObj.expiredInfo.ExpireAt)
+				//if unchanged, expire time can update to expireDuration + uncheckedDuration
+				fbe.ExpireTime = expiredObj.expiredInfo.ExpireDuration + uncheckedDuration
+			}
+			result = append(result, fbe)
+			continue
 		}
 
-		result[i] = &entity.FeedbackEntry{
-			ID:              idCaches[i].id,
+		result = append(result, &entity.FeedbackEntry{
+			ID:              obj.StringID(),
 			QuerierName:     querierName,
-			CurrentFeedback: currentFeedback,
-			RecentFeedback:  idDataMap[idCaches[i].id],
+			CurrentFeedback: entity.FeedbackChanged,
+			RecentFeedback:  nil,
 			GlobalFeedback:  globalData,
 			GroupFeedback:   groupData,
-			ExpireTime:      time.Duration(expireDataMap[idCaches[i].id]),
-		}
+			ExpireTime:      0,
+		})
 	}
 	return result, nil
 }
@@ -289,10 +426,12 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 	newFeedbacks []*entity.FeedbackRecordEntry) {
 
 	cachePairs := make([]interface{}, len(newFeedbacks)*2)
+	now := time.Now()
 	for i := range newFeedbacks {
 		expireData := &CacheExpire{
-			ID:         newFeedbacks[i].ID,
-			ExpireTime: int64(newFeedbacks[i].ExpireTime),
+			ID:             newFeedbacks[i].ID,
+			ExpireAt:       now.Add(newFeedbacks[i].ExpireTime),
+			ExpireDuration: newFeedbacks[i].ExpireTime,
 		}
 		jsonData, err := json.Marshal(expireData)
 		if err != nil {
@@ -311,15 +450,19 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 func (c *PassiveRefresher) fetchExpireTime(ctx context.Context,
 	client *redis.Client,
 	querierName string,
-	ids []string) (map[string]int64, error) {
+	ids []string) (map[string]*CacheExpire, error) {
 	//expireTime
-	expireData, err := client.MGet(c.engine.keyList(querierName, ids, idExpirePrefix)...).Result()
+	if len(ids) < 1 {
+		return nil, nil
+	}
+	keys := c.engine.keyList(querierName, ids, idExpirePrefix)
+	expireData, err := client.MGet(keys...).Result()
 	//handle nil
 	if err != nil {
-		log.Error(ctx, "GetRedis failed", log.Err(err))
+		log.Error(ctx, "GetRedis failed", log.Err(err), log.Strings("keys", keys))
 		return nil, err
 	}
-	expireDataMap := make(map[string]int64)
+	expireDataMap := make(map[string]*CacheExpire)
 	for i := range expireData {
 		data, ok := expireData[i].(string)
 		if !ok {
@@ -333,7 +476,7 @@ func (c *PassiveRefresher) fetchExpireTime(ctx context.Context,
 				log.String("data", data))
 			return nil, err
 		}
-		expireDataMap[expireData.ID] = expireData.ExpireTime
+		expireDataMap[expireData.ID] = expireData
 	}
 	return expireDataMap, nil
 }

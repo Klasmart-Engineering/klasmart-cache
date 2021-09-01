@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	defaultFirstExpireTime = time.Minute
+	defaultFirstExpireTime = time.Second * 10
 )
 
 type IExpireCalculator interface {

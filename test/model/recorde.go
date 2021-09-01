@@ -24,6 +24,9 @@ func (a RecordEEntity) StringID() string {
 func (a RecordEEntity) RelatedIDs() []*cache.RelatedEntity {
 	return nil
 }
+func (a RecordEEntity) Equal(o cache.Object) bool {
+	return true
+}
 
 type RecordEQuerier struct {
 }

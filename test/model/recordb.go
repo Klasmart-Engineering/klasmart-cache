@@ -30,6 +30,9 @@ func (a RecordBEntity) RelatedIDs() []*cache.RelatedEntity {
 		},
 	}
 }
+func (a RecordBEntity) Equal(o cache.Object) bool {
+	return true
+}
 
 type RecordBQuerier struct {
 }
@@ -133,11 +136,11 @@ func (r *RecordBCondition) GetOrderBy() string {
 }
 
 var (
-	_recordBQuerier     cache.IQuerier
+	_recordBQuerier     cache.IConditionQuerier
 	_recordBQuerierOnce sync.Once
 )
 
-func GetBQuerier() cache.IQuerier {
+func GetBQuerier() cache.IConditionQuerier {
 	_recordBQuerierOnce.Do(func() {
 		_recordBQuerier = new(RecordBQuerier)
 	})

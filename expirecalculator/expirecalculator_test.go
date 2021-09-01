@@ -174,6 +174,6 @@ func testCalculatorFreq(t *testing.T, calculator IExpireCalculator, frequance []
 func TestSimpleTimeExpireCalculator(t *testing.T) {
 	calculator := new(IntegrateDerivativeTimeExpireCalculator)
 	frequance := fixedValues(1*time.Minute, times)
-	frequance = squareWave(frequance, 100, 30)
-	testCalculator(t, calculator, frequance)
+	frequance = squareWave(frequance, 1000, 60)
+	testCalculatorFreq(t, calculator, frequance)
 }
