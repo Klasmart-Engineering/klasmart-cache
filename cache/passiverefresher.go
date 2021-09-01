@@ -9,6 +9,7 @@ import (
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/expirecalculator"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
 	"gitlab.badanamu.com.cn/calmisland/ro"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -371,7 +372,7 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 				ExpireTime:      expiredObj.expiredInfo.ExpireDuration,
 			}
 			//unchanged
-			if expiredObj.object.Equal(obj) {
+			if reflect.DeepEqual(expiredObj.object, obj) {
 				fbe.CurrentFeedback = entity.FeedbackUnchanged
 				uncheckedDuration := now.Sub(expiredObj.expiredInfo.ExpireAt)
 				//if unchanged, expire time can update to expireDuration + uncheckedDuration

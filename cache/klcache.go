@@ -46,7 +46,6 @@ type IQuerier interface {
 type Object interface {
 	StringID() string
 	RelatedIDs() []*RelatedEntity
-	Equal(o Object) bool
 }
 
 type ICacheEngine interface {

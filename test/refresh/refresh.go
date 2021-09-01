@@ -50,7 +50,7 @@ func initQuerier(ctx context.Context) {
 
 func test(ctx context.Context) {
 	entities := make([]cache.Object, 0)
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 1; i++ {
 		err := cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().ID(), ids, &entities)
 		if err != nil {
 			panic(err)
