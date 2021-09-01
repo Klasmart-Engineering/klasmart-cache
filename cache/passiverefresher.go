@@ -238,7 +238,7 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 	}
 
 	//save expirecalculator info
-	c.saveFeedback(ctx, querier.ID(), feedbackRecord)
+	c.saveFeedback(ctx, client, querier.ID(), feedbackRecord)
 }
 
 func (c *PassiveRefresher) fetchObjects(ctx context.Context,
@@ -263,12 +263,10 @@ func (c *PassiveRefresher) fetchObjects(ctx context.Context,
 	return idCaches, objMap
 }
 
-func (c *PassiveRefresher) saveFeedback(ctx context.Context, querierName string, newFeedback []*entity.FeedbackRecordEntry) error {
-	client, err := ro.GetRedis(ctx)
-	if err != nil {
-		log.Error(ctx, "GetRedis failed", log.Err(err))
-		return err
-	}
+func (c *PassiveRefresher) saveFeedback(ctx context.Context,
+	client *redis.Client,
+	querierName string,
+	newFeedback []*entity.FeedbackRecordEntry) {
 	//save global data & group data
 	globalData := make([]interface{}, len(newFeedback))
 	groupData := make([]interface{}, len(newFeedback))
@@ -300,7 +298,6 @@ func (c *PassiveRefresher) saveFeedback(ctx context.Context, querierName string,
 
 	//clean redis list
 	c.cleanRedisList(ctx, client, cleanKeyList)
-	return nil
 }
 
 func (c *PassiveRefresher) cleanRedisList(ctx context.Context, client *redis.Client, keys []string) {
