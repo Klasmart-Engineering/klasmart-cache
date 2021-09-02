@@ -45,7 +45,7 @@ type fetchObjectDataResponse struct {
 }
 
 type IPassiveRefresher interface {
-	BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object) error
+	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error
 	SetUpdateFrequency(maxFrequency, minFrequency time.Duration)
 }
 
@@ -68,7 +68,7 @@ func (c *PassiveRefresher) SetUpdateFrequency(maxFrequency, minFrequency time.Du
 func (c *PassiveRefresher) BatchGet(ctx context.Context,
 	querierName string,
 	ids []string,
-	result *[]Object) error {
+	res interface{}) error {
 	querier, exists := c.engine.querierMap[querierName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
@@ -79,6 +79,11 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 	client, err := ro.GetRedis(ctx)
 	if err != nil {
 		log.Error(ctx, "GetRedis failed", log.Err(err))
+		return err
+	}
+	result, err := NewReflectObjectSlice(res)
+	if err != nil {
+		log.Error(ctx, "NewReflectObjectSlice failed", log.Err(err), log.Any("res", res))
 		return err
 	}
 
@@ -102,7 +107,7 @@ func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
 	client *redis.Client,
 	querierName string,
 	hitIDs []string,
-	result *[]Object) (map[string]*expiredObject, error) {
+	result *ReflectObjectSlice) (map[string]*expiredObject, error) {
 	expiredInfo, err := c.fetchExpireTime(ctx, client, querierName, hitIDs)
 	if err != nil {
 		log.Error(ctx, "fetchExpireTime failed",
@@ -113,9 +118,9 @@ func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
 	}
 	//build objects map
 	objMap := make(map[string]Object)
-	for i := range *result {
-		objMap[(*result)[i].StringID()] = (*result)[i]
-	}
+	result.Iterator(func(o Object) {
+		objMap[o.StringID()] = o
+	})
 
 	expiredObjects := make(map[string]*expiredObject)
 	now := time.Now()
@@ -137,10 +142,8 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	querier IQuerier,
 	client *redis.Client,
 	ids []string,
-	result *[]Object) (*fetchObjectDataResponse, error) {
+	result *ReflectObjectSlice) (*fetchObjectDataResponse, error) {
 
-	//allocate space
-	*result = make([]Object, 0, len(ids))
 	//query from cache
 	missingIDs := ids
 	hitIDs := make([]string, 0, len(ids))
@@ -190,9 +193,9 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
 		return nil, err
 	}
-	*result = append(*result, missingObjs...)
+	result.Append(missingObjs...)
 
-	*result = c.engine.resort(ctx, ids, *result)
+	c.engine.resort(ctx, ids, result)
 
 	dbObjects := make(map[string]Object)
 	for i := range missingObjs {

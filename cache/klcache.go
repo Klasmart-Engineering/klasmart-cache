@@ -17,6 +17,7 @@ import (
 var (
 	ErrUnknownQuerier            = errors.New("unknown querier")
 	ErrQuerierUnsupportCondition = errors.New("querier doesn't support condition search")
+	ErrInvalidObjectSlice        = errors.New("invalid object slice")
 )
 
 const (
@@ -38,7 +39,6 @@ type IConditionQuerier interface {
 
 type IQuerier interface {
 	BatchGet(ctx context.Context, ids []string) ([]Object, error)
-	UnmarshalObject(ctx context.Context, jsonData string) (Object, error)
 
 	ID() string
 }
@@ -49,9 +49,9 @@ type Object interface {
 }
 
 type ICacheEngine interface {
-	Query(ctx context.Context, querierName string, condition dbo.Conditions, result *[]Object) error
+	Query(ctx context.Context, querierName string, condition dbo.Conditions, result interface{}) error
 	Clean(ctx context.Context, querierName string, ids []string)
-	BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object) error
+	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error
 
 	SetExpire(ctx context.Context, duration time.Duration)
 
@@ -70,8 +70,13 @@ func (c *CacheEngine) AddQuerier(ctx context.Context, querier IQuerier) {
 	c.querierMap[querier.ID()] = querier
 }
 
-func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object) error {
-	return c.doBatchGet(ctx, querierName, ids, result)
+func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error {
+	s, err := NewReflectObjectSlice(result)
+	if err != nil {
+		log.Error(ctx, "fail to create object slice", log.Err(err), log.Any("result", result))
+		return err
+	}
+	return c.doBatchGet(ctx, querierName, ids, s)
 }
 
 func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []string) {
@@ -88,7 +93,7 @@ func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []strin
 	})
 }
 
-func (c *CacheEngine) Query(ctx context.Context, querierName string, condition dbo.Conditions, result *[]Object) error {
+func (c *CacheEngine) Query(ctx context.Context, querierName string, condition dbo.Conditions, result interface{}) error {
 	querier, exists := c.querierMap[querierName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
@@ -118,7 +123,7 @@ func (c *CacheEngine) Query(ctx context.Context, querierName string, condition d
 func (c *CacheEngine) fetchData(ctx context.Context,
 	querierName string,
 	ids []string,
-	result *[]Object) ([]Object, error) {
+	result *ReflectObjectSlice) ([]Object, error) {
 	querier, exists := c.querierMap[querierName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
@@ -132,8 +137,6 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 		return nil, err
 	}
 
-	//allocate space
-	*result = make([]Object, 0, len(ids))
 	//query from cache
 	missingIDs := ids
 	if len(ids) > 0 {
@@ -161,14 +164,13 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
 		return nil, err
 	}
-	*result = append(*result, missingObjs...)
+	result.Append(missingObjs...)
 
-	*result = c.resort(ctx, ids, *result)
-
+	c.resort(ctx, ids, result)
 	return missingObjs, nil
 }
 
-func (c *CacheEngine) doBatchGet(ctx context.Context, querierName string, ids []string, result *[]Object) error {
+func (c *CacheEngine) doBatchGet(ctx context.Context, querierName string, ids []string, result *ReflectObjectSlice) error {
 	querier, exists := c.querierMap[querierName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
@@ -189,12 +191,12 @@ func (c *CacheEngine) doBatchGet(ctx context.Context, querierName string, ids []
 	return nil
 }
 
-func (c *CacheEngine) resort(ctx context.Context, ids []string, result []Object) []Object {
+func (c *CacheEngine) resort(ctx context.Context, ids []string, result *ReflectObjectSlice) {
 	resultMap := make(map[string]Object)
-	for i := range result {
-		resultMap[result[i].StringID()] = result[i]
-	}
-	newResult := make([]Object, 0, len(result))
+	result.Iterator(func(o Object) {
+		resultMap[o.StringID()] = o
+	})
+	newResult := make([]Object, 0, len(ids))
 	for i := range ids {
 		obj, exists := resultMap[ids[i]]
 		if !exists {
@@ -202,8 +204,7 @@ func (c *CacheEngine) resort(ctx context.Context, ids []string, result []Object)
 		}
 		newResult = append(newResult, obj)
 	}
-
-	return newResult
+	result.SetSlice(newResult)
 }
 
 func (c *CacheEngine) doClean(ctx context.Context, querierName string, ids []string) error {
@@ -327,7 +328,7 @@ func (c *CacheEngine) queryForCache(ctx context.Context,
 	querier IQuerier,
 	client *redis.Client,
 	ids []string,
-	result *[]Object) ([]string, []string, error) {
+	result *ReflectObjectSlice) ([]string, []string, error) {
 	missingIDs := make([]string, 0, len(ids))
 	hitIDs := make([]string, 0, len(ids))
 	cacheRes, err := client.MGet(c.keyList(querier.ID(), ids, c.IDKey)...).Result()
@@ -345,14 +346,15 @@ func (c *CacheEngine) queryForCache(ctx context.Context,
 			if !ok {
 				continue
 			}
-			obj, err := querier.UnmarshalObject(ctx, res)
+			obj := result.NewElement()
+			err = json.Unmarshal([]byte(res), &obj)
 			if err != nil {
 				log.Error(ctx, "UnmarshalObject failed",
 					log.Err(err),
 					log.String("res", res))
 				return nil, nil, err
 			}
-			*result = append(*result, obj)
+			result.Append(obj)
 		}
 
 		//get missing ids
@@ -470,13 +472,14 @@ func (c *CacheEngine) saveCache(ctx context.Context,
 	//save related ids
 	c.saveRelatedIDs(ctx, client, relatedRecords, expireAt, infinite)
 }
-func (c *CacheEngine) containsInObjects(Octx context.Context, objs []Object, id string) bool {
-	for i := range objs {
-		if objs[i].StringID() == id {
-			return true
+func (c *CacheEngine) containsInObjects(Octx context.Context, objs ReflectObjectSlice, id string) bool {
+	flag := false
+	objs.Iterator(func(o Object) {
+		if o.StringID() == id {
+			flag = true
 		}
-	}
-	return false
+	})
+	return flag
 }
 
 var (
