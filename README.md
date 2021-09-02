@@ -178,19 +178,22 @@ kl-cache中缓存失效的时间默认为**5分钟**，失效缓存我们采用*
 # 如何接入缓存
 kl-cache尽可能保证低侵入，要接入缓存，需要实现两个接口，即Object接口和IQuerier接口。
 ```go
-//Querier
-type IQuerier interface {
-	QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error)
-	BatchGet(ctx context.Context, ids []string) ([]Object, error)
-	UnmarshalObject(ctx context.Context, jsonData string) (Object, error)
-
-	ID() string
-}
-//Object
-type Object interface {
-	StringID() string
-	RelatedIDs() map[string][]string
-}
+    //Condition querier
+    type IConditionQuerier interface{
+    IQuerier
+    QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error)
+    }
+    
+    //Querier
+    type IQuerier interface {
+        BatchGet(ctx context.Context, ids []string) ([]Object, error)
+        ID() string
+    }
+    //Object
+    type Object interface {
+        StringID() string
+        RelatedIDs() map[string][]string
+    }
 ```
 	所有要缓存的数据都要实现Object接口，该接口包含两个函数，StringID()方法返回Object的id，RelatedIDs返回关联数据id，key为关联数据对应的querier的id。
 
@@ -216,7 +219,9 @@ IQuerier为查询接口，其函数说明如下：
 type ICacheEngine interface {
 	Query(ctx context.Context, querierName string, condition dbo.Conditions, result *[]Object) error
 	Clean(ctx context.Context, querierName string, ids []string) error
-
+    BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error
+    
+    SetExpire(ctx context.Context, duration time.Duration)
 	AddQuerier(ctx context.Context, querier IQuerier)
 }
 ```
