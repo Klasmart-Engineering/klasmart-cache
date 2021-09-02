@@ -180,8 +180,7 @@ kl-cache尽可能保证低侵入，要接入缓存，需要实现两个接口，
 ```go
     //Condition querier
     type IConditionQuerier interface{
-    IQuerier
-    QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error)
+        QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error)
     }
     
     //Querier
