@@ -24,6 +24,9 @@ func (a RecordCEntity) StringID() string {
 func (a RecordCEntity) RelatedIDs() []*cache.RelatedEntity {
 	return nil
 }
+func (a RecordCEntity) Equal(o cache.Object) bool {
+	return true
+}
 
 type RecordCQuerier struct {
 }
@@ -103,11 +106,11 @@ func (r *RecordCCondition) GetOrderBy() string {
 }
 
 var (
-	_recordCQuerier     cache.IQuerier
+	_recordCQuerier     cache.IConditionQuerier
 	_recordCQuerierOnce sync.Once
 )
 
-func GetCQuerier() cache.IQuerier {
+func GetCQuerier() cache.IConditionQuerier {
 	_recordCQuerierOnce.Do(func() {
 		_recordCQuerier = new(RecordCQuerier)
 	})

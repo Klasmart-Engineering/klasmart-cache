@@ -46,6 +46,22 @@ func (a RecordAEntity) RelatedIDs() []*cache.RelatedEntity {
 		},
 	}
 }
+func (a RecordAEntity) Equal(o cache.Object) bool {
+	a0, ok := o.(*RecordAEntity)
+	if !ok {
+		return false
+	}
+	if a0.Name != a.Name {
+		return false
+	}
+	if a0.Description != a.Description {
+		return false
+	}
+	if a0.Keywords != a.Keywords {
+		return false
+	}
+	return true
+}
 
 type RecordAQuerier struct {
 }

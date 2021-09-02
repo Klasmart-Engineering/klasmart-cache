@@ -6,55 +6,48 @@ import (
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"gitlab.badanamu.com.cn/calmisland/ro"
 	"strings"
+	"sync"
 	"time"
 )
 
-func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object, refresh bool) error {
-	querier, exists := c.querierMap[querierName]
-	if !exists {
-		log.Error(ctx, "GetRedis failed",
+const (
+	defaultRefreshSize     = 10
+	defaultRefreshInterval = time.Second * 30
+
+	klcRefreshPrefix = "klc:cache:refresh"
+	klcIDSeparator   = "-"
+)
+
+type CacheRefresher struct {
+	engine *CacheEngine
+
+	refreshSize     int64
+	refreshInterval time.Duration
+
+	start bool
+}
+
+func (c *CacheRefresher) SetRefreshSize(ctx context.Context, refreshSize int64) {
+	c.refreshSize = refreshSize
+}
+func (c *CacheRefresher) SetRefreshInterval(ctx context.Context, refreshInterval time.Duration) {
+	c.refreshInterval = refreshInterval
+}
+func (c *CacheRefresher) BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object, refresh bool) error {
+	err := c.engine.BatchGet(ctx, querierName, ids, result)
+	if err != nil {
+		log.Error(ctx, "BatchGet failed",
+			log.Err(err),
 			log.String("querierName", querierName),
-			log.Any("querierMap", c.querierMap))
-		return ErrUnknownQuerier
+			log.Strings("ids", ids))
+		return err
 	}
+
 	client, err := ro.GetRedis(ctx)
 	if err != nil {
 		log.Error(ctx, "GetRedis failed", log.Err(err))
 		return err
 	}
-
-	//allocate space
-	*result = make([]Object, 0, len(ids))
-	//query from cache
-	missingIDs := ids
-	if len(ids) > 0 {
-		missingIDs, err = c.queryForCache(ctx, querier, client, ids, result)
-		if err != nil {
-			log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
-			return err
-		}
-	}
-	//all in cache
-	if len(missingIDs) < 1 {
-		log.Info(ctx, "All in cache")
-		return nil
-	} else if len(missingIDs) == len(ids) {
-		log.Info(ctx, "All missing cache")
-	} else {
-		log.Info(ctx, "Parts in cache")
-	}
-	//query from database
-	missingObjs, err := c.batchGetFromDB(ctx, querier, missingIDs)
-	if err != nil {
-		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
-		return err
-	}
-
-	//save cache
-	go c.saveCache(ctx, querier, client, missingObjs)
-	*result = append(*result, missingObjs...)
-
-	*result = c.resort(ctx, ids, *result)
 
 	//if need refresh, enqueue it
 	if refresh {
@@ -62,11 +55,12 @@ func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []st
 	}
 	return nil
 }
-func (c *CacheEngine) Stop() {
+
+func (c *CacheRefresher) Stop() {
 	c.start = false
 }
 
-func (c *CacheEngine) Start() {
+func (c *CacheRefresher) Start() {
 	ctx := context.Background()
 	client, err := ro.GetRedis(ctx)
 	if err != nil {
@@ -82,7 +76,7 @@ func (c *CacheEngine) Start() {
 		}
 	}()
 }
-func (c *CacheEngine) doRefresh(ctx context.Context, client *redis.Client) {
+func (c *CacheRefresher) doRefresh(ctx context.Context, client *redis.Client) {
 	querierMap, err := c.dequeueData(ctx, client)
 	if err != nil {
 		log.Error(ctx, "dequeueData failed",
@@ -92,11 +86,11 @@ func (c *CacheEngine) doRefresh(ctx context.Context, client *redis.Client) {
 
 	//enqueue
 	for querierName, ids := range querierMap {
-		querier, exists := c.querierMap[querierName]
+		querier, exists := c.engine.querierMap[querierName]
 		if !exists {
 			log.Error(ctx, "GetRedis failed",
 				log.String("querierName", querierName),
-				log.Any("querierMap", c.querierMap))
+				log.Any("querierMap", c.engine.querierMap))
 			continue
 		}
 		objs, err := querier.BatchGet(ctx, ids)
@@ -108,14 +102,14 @@ func (c *CacheEngine) doRefresh(ctx context.Context, client *redis.Client) {
 			continue
 		}
 		//update cache
-		c.saveCache(ctx, querier, client, objs)
+		c.engine.saveCache(ctx, querier, client, objs, 0)
 
 		//redo enqueue for next refresh
 		c.enqueueData(ctx, client, querierName, ids)
 	}
 }
 
-func (c *CacheEngine) enqueueData(ctx context.Context, client *redis.Client, querierName string, ids []string) {
+func (c *CacheRefresher) enqueueData(ctx context.Context, client *redis.Client, querierName string, ids []string) {
 	values := make([]interface{}, len(ids))
 	for i := range ids {
 		values[i] = querierName + klcIDSeparator + ids[i]
@@ -123,7 +117,7 @@ func (c *CacheEngine) enqueueData(ctx context.Context, client *redis.Client, que
 	client.SAdd(klcRefreshPrefix, values...)
 }
 
-func (c *CacheEngine) dequeueData(ctx context.Context, client *redis.Client) (map[string][]string, error) {
+func (c *CacheRefresher) dequeueData(ctx context.Context, client *redis.Client) (map[string][]string, error) {
 	data, err := client.SPopN(klcRefreshPrefix, c.refreshSize).Result()
 	if err != nil {
 		log.Error(ctx, "pop redis set failed",
@@ -151,4 +145,20 @@ func (c *CacheEngine) dequeueData(ctx context.Context, client *redis.Client) (ma
 		result[querierName] = querierData
 	}
 	return result, nil
+}
+
+var (
+	_cacheRefresherEngine     *CacheRefresher
+	_cacheRefresherEngineOnce sync.Once
+)
+
+func GetCacheRefresher() *CacheRefresher {
+	_cacheRefresherEngineOnce.Do(func() {
+		_cacheRefresherEngine = &CacheRefresher{
+			engine:          GetCacheEngine(),
+			refreshSize:     defaultRefreshSize,
+			refreshInterval: defaultRefreshInterval,
+		}
+	})
+	return _cacheRefresherEngine
 }
