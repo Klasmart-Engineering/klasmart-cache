@@ -218,9 +218,9 @@ IQuerier为查询接口，其函数说明如下：
 type ICacheEngine interface {
 	Query(ctx context.Context, querierName string, condition dbo.Conditions, result *[]Object) error
 	Clean(ctx context.Context, querierName string, ids []string) error
-    BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error
+	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error
     
-    SetExpire(ctx context.Context, duration time.Duration)
+	SetExpire(ctx context.Context, duration time.Duration)
 	AddQuerier(ctx context.Context, querier IQuerier)
 }
 ```
