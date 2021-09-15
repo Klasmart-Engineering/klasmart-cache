@@ -46,7 +46,7 @@ func (r *RecordEQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditio
 	}
 	return result, nil
 }
-func (r *RecordEQuerier) BatchGet(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
+func (r *RecordEQuerier) QueryByIDs(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
 	condition := &RecordACondition{
 		IDs: ids,
 	}

@@ -34,7 +34,7 @@ func (c *CacheRefresher) SetRefreshInterval(ctx context.Context, refreshInterval
 func (c *CacheRefresher) BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object, refresh bool) error {
 	err := c.engine.BatchGet(ctx, querierName, ids, result)
 	if err != nil {
-		log.Error(ctx, "BatchGet failed",
+		log.Error(ctx, "QueryByIDs failed",
 			log.Err(err),
 			log.String("querierName", querierName),
 			log.Strings("ids", ids))
@@ -91,7 +91,7 @@ func (c *CacheRefresher) doRefresh(ctx context.Context, client *redis.Client) {
 				log.Any("querierMap", c.engine.querierMap))
 			continue
 		}
-		objs, err := querier.BatchGet(ctx, ids)
+		objs, err := querier.QueryByIDs(ctx, ids)
 		if err != nil {
 			log.Error(ctx, "Query for refresh failed",
 				log.Err(err),

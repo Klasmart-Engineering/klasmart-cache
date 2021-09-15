@@ -38,7 +38,7 @@ type IConditionQuerier interface {
 }
 
 type IQuerier interface {
-	BatchGet(ctx context.Context, ids []string, options ...interface{}) ([]Object, error)
+	QueryByIDs(ctx context.Context, ids []string, options ...interface{}) ([]Object, error)
 
 	ID() string
 }
@@ -276,7 +276,7 @@ func (c *CacheEngine) cleanRelatedIDs(ctx context.Context, client *redis.Client,
 	for i := range keyList {
 		tempRes, err := client.SMembers(keyList[i]).Result()
 		if err != nil {
-			log.Error(ctx, "BatchGet failed",
+			log.Error(ctx, "QueryByIDs failed",
 				log.Err(err),
 				log.Strings("ids", ids))
 			return err
@@ -323,9 +323,9 @@ func (c *CacheEngine) batchGetFromDB(ctx context.Context,
 	//query from database segmented
 	missingObjs := make([]Object, 0, len(missingIDs))
 	utils.SegmentLoop(context.Background(), len(missingIDs), 800, func(start, end int) error {
-		segmentObjs, err := querier.BatchGet(ctx, missingIDs[start:end], options)
+		segmentObjs, err := querier.QueryByIDs(ctx, missingIDs[start:end], options)
 		if err != nil {
-			log.Error(ctx, "BatchGet failed",
+			log.Error(ctx, "QueryByIDs failed",
 				log.Err(err),
 				log.Strings("missingIDs", missingIDs),
 				log.Any("options", options))

@@ -34,7 +34,7 @@ func queryAByDB(ctx context.Context, prefix string) {
 			fmt.Println("query failed, err:", err)
 			continue
 		}
-		_, err = model.GetAQuerier().BatchGet(ctx, ids)
+		_, err = model.GetAQuerier().QueryByIDs(ctx, ids)
 		if err != nil {
 			fmt.Println("query data failed, err:", err)
 			continue
@@ -51,7 +51,7 @@ func queryBByDB(ctx context.Context, prefix string) {
 			fmt.Println("query failed, err:", err)
 			continue
 		}
-		res, err := model.GetBQuerier().BatchGet(ctx, ids)
+		res, err := model.GetBQuerier().QueryByIDs(ctx, ids)
 		if err != nil {
 			fmt.Println("query data failed, err:", err)
 			continue
@@ -69,7 +69,7 @@ func queryCByDB(ctx context.Context, prefix string) {
 			fmt.Println("query failed, err:", err)
 			continue
 		}
-		res, err := model.GetCQuerier().BatchGet(ctx, ids)
+		res, err := model.GetCQuerier().QueryByIDs(ctx, ids)
 		if err != nil {
 			fmt.Println("query data failed, err:", err)
 			continue

@@ -84,7 +84,7 @@ func (r *RecordAQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditio
 	return result, nil
 }
 
-func (r *RecordAQuerier) BatchGet(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
+func (r *RecordAQuerier) QueryByIDs(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
 	condition := &RecordACondition{
 		IDs: ids,
 	}
@@ -220,7 +220,7 @@ func (r *RecordACondition) GetOrderBy() string {
 }
 
 func queryObjectMap(ctx context.Context, querier cache.IQuerier, ids []string) (map[string]cache.Object, error) {
-	data, err := querier.BatchGet(ctx, ids)
+	data, err := querier.QueryByIDs(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
