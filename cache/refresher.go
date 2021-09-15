@@ -32,7 +32,7 @@ func (c *CacheRefresher) SetRefreshInterval(ctx context.Context, refreshInterval
 	c.refreshInterval = refreshInterval
 }
 func (c *CacheRefresher) BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object, refresh bool) error {
-	err := c.engine.BatchGet(ctx, querierName, ids, result)
+	err := c.engine.BatchGet(ctx, querierName, ids, result, InfiniteExpire)
 	if err != nil {
 		log.Error(ctx, "QueryByIDs failed",
 			log.Err(err),
