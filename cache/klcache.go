@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
 	"sync"
 	"time"
 
@@ -22,9 +25,6 @@ var (
 
 const (
 	defaultExpire = time.Minute * 10
-
-	klcEntryPrefix   = "klc:cache:entry:"
-	klcRelatedPrefix = "klc:cache:related:"
 )
 
 type RelatedEntity struct {
@@ -146,11 +146,16 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 			return nil, err
 		}
 	}
+
+	missingIDsCount := len(missingIDs)
+	allIDsCount := len(ids)
+
+	go statistics.GetHitRatioRecorder().AddHitRatio(ctx, allIDsCount-missingIDsCount, missingIDsCount)
 	//all in cache
-	if len(missingIDs) < 1 {
+	if missingIDsCount < 1 {
 		log.Info(ctx, "All in cache")
 		return nil, nil
-	} else if len(missingIDs) == len(ids) {
+	} else if missingIDsCount == allIDsCount {
 		log.Info(ctx, "All missing cache",
 			log.Strings("all ids", ids))
 	} else {
@@ -158,6 +163,7 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 			log.Strings("missing IDs", missingIDs),
 			log.Strings("all ids", ids))
 	}
+
 	//query from database
 	missingObjs, err := c.batchGetFromDB(ctx, querier, missingIDs)
 	if err != nil {
@@ -246,10 +252,10 @@ func (c *CacheEngine) keyList(prefix string, ids []string, idMap func(prefix str
 	return keys
 }
 func (c *CacheEngine) IDKey(querierName string, id string) string {
-	return klcEntryPrefix + querierName + ":" + id
+	return constant.KlcEntryPrefix + querierName + ":" + id
 }
 func (c *CacheEngine) RelatedIDKey(querierName string, id string) string {
-	return klcRelatedPrefix + querierName + ":" + id
+	return constant.KlcRelatedPrefix + querierName + ":" + id
 }
 func (c *CacheEngine) doubleDelete(ctx context.Context, deleteFunc func()) {
 	go func() {
@@ -311,7 +317,7 @@ func (c *CacheEngine) batchGetFromDB(ctx context.Context,
 	missingIDs []string) ([]Object, error) {
 	//query from database segmented
 	missingObjs := make([]Object, 0, len(missingIDs))
-	SegmentLoop(context.Background(), len(missingIDs), 800, func(start, end int) error {
+	utils.SegmentLoop(context.Background(), len(missingIDs), 800, func(start, end int) error {
 		segmentObjs, err := querier.BatchGet(ctx, missingIDs[start:end])
 		if err != nil {
 			log.Error(ctx, "BatchGet failed", log.Err(err), log.Strings("missingIDs", missingIDs))

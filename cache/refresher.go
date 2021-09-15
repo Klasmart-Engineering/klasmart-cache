@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/go-redis/redis"
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
 	"gitlab.badanamu.com.cn/calmisland/ro"
 	"strings"
 	"sync"
@@ -13,9 +14,6 @@ import (
 const (
 	defaultRefreshSize     = 10
 	defaultRefreshInterval = time.Second * 30
-
-	klcRefreshPrefix = "klc:cache:refresh"
-	klcIDSeparator   = "-"
 )
 
 type CacheRefresher struct {
@@ -112,13 +110,13 @@ func (c *CacheRefresher) doRefresh(ctx context.Context, client *redis.Client) {
 func (c *CacheRefresher) enqueueData(ctx context.Context, client *redis.Client, querierName string, ids []string) {
 	values := make([]interface{}, len(ids))
 	for i := range ids {
-		values[i] = querierName + klcIDSeparator + ids[i]
+		values[i] = querierName + constant.KlcIDSeparator + ids[i]
 	}
-	client.SAdd(klcRefreshPrefix, values...)
+	client.SAdd(constant.KlcRefreshPrefix, values...)
 }
 
 func (c *CacheRefresher) dequeueData(ctx context.Context, client *redis.Client) (map[string][]string, error) {
-	data, err := client.SPopN(klcRefreshPrefix, c.refreshSize).Result()
+	data, err := client.SPopN(constant.KlcRefreshPrefix, c.refreshSize).Result()
 	if err != nil {
 		log.Error(ctx, "pop redis set failed",
 			log.Err(err))
@@ -126,7 +124,7 @@ func (c *CacheRefresher) dequeueData(ctx context.Context, client *redis.Client) 
 	}
 	result := make(map[string][]string)
 	for i := range data {
-		keyPairs := strings.Split(data[i], klcIDSeparator)
+		keyPairs := strings.Split(data[i], constant.KlcIDSeparator)
 		if len(keyPairs) != 2 {
 			log.Error(ctx, "pop redis set failed",
 				log.Err(err),

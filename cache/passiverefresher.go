@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"github.com/go-redis/redis"
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/entity"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/expirecalculator"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
 	"gitlab.badanamu.com.cn/calmisland/ro"
 	"reflect"
@@ -15,11 +17,6 @@ import (
 )
 
 const (
-	klcGlobalFeedbackPrefix = "klc:cache:expirecalculator:global"
-	klcGroupFeedbackPrefix  = "klc:cache:expirecalculator:group:"
-	klcIDFeedbackPrefix     = "klc:cache:expirecalculator:id:"
-	klcIDExpirePrefix       = "klc:cache:expire:id:"
-
 	defaultUpdateMaxFrequency = time.Minute * 30
 	defaultUpdateMinFrequency = time.Second * 15
 )
@@ -172,14 +169,18 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	log.Debug(ctx, "Expired ids",
 		log.Any("expired objs", expiredObjects))
 
+	missingIDsCount := len(missingIDs)
+	allIDsCount := len(ids)
+	go statistics.GetHitRatioRecorder().AddHitRatio(ctx, allIDsCount-missingIDsCount, missingIDsCount)
+
 	//all in cache
-	if len(missingIDs) < 1 {
+	if missingIDsCount < 1 {
 		log.Info(ctx, "All in cache")
 		return &fetchObjectDataResponse{
 			dbObjects:      nil,
 			expiredObjects: expiredObjects,
 		}, nil
-	} else if len(missingIDs) == len(ids) {
+	} else if missingIDsCount == allIDsCount {
 		log.Info(ctx, "All missing cache",
 			log.Strings("all ids", ids))
 	} else {
@@ -187,6 +188,7 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 			log.Strings("missing IDs", missingIDs),
 			log.Strings("all ids", ids))
 	}
+
 	//query from database
 	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs)
 	if err != nil {
@@ -280,14 +282,14 @@ func (c *PassiveRefresher) saveFeedback(ctx context.Context,
 	}
 
 	//save global data
-	client.LPush(klcGlobalFeedbackPrefix, globalData...)
+	client.LPush(constant.KlcGlobalFeedbackPrefix, globalData...)
 	//save group data
-	client.LPush(klcGroupFeedbackPrefix+querierName, groupData...)
+	client.LPush(constant.KlcGroupFeedbackPrefix+querierName, groupData...)
 
 	//pending clean key list
 	cleanKeyList := []string{
-		klcGlobalFeedbackPrefix,
-		klcGroupFeedbackPrefix + querierName,
+		constant.KlcGlobalFeedbackPrefix,
+		constant.KlcGroupFeedbackPrefix + querierName,
 	}
 
 	//save id data
@@ -488,7 +490,7 @@ func (c *PassiveRefresher) fetchGlobalGroupFeedback(ctx context.Context,
 	var globalData []int
 	var groupData []int
 
-	globalRaw, err := client.LRange(klcGlobalFeedbackPrefix, 0, entity.FeedbackRecordSize).Result()
+	globalRaw, err := client.LRange(constant.KlcGlobalFeedbackPrefix, 0, entity.FeedbackRecordSize).Result()
 	if err != redis.Nil {
 		if err != nil {
 			log.Error(ctx, "Redis LRange global failed",
@@ -498,7 +500,7 @@ func (c *PassiveRefresher) fetchGlobalGroupFeedback(ctx context.Context,
 		globalData = utils.StringsToInts(ctx, globalRaw)
 	}
 
-	groupRaw, err := client.LRange(klcGroupFeedbackPrefix+querierName, 0, entity.FeedbackRecordSize).Result()
+	groupRaw, err := client.LRange(constant.KlcGroupFeedbackPrefix+querierName, 0, entity.FeedbackRecordSize).Result()
 	if err != redis.Nil {
 		if err != nil {
 			log.Error(ctx, "Redis LRange group failed",
@@ -522,10 +524,10 @@ func (c *PassiveRefresher) expireLimit(expire time.Duration) time.Duration {
 }
 
 func idFeedbackPrefix(querierName string, id string) string {
-	return klcIDFeedbackPrefix + querierName + ":" + id
+	return constant.KlcIDFeedbackPrefix + querierName + ":" + id
 }
 func idExpirePrefix(querierName string, id string) string {
-	return klcIDExpirePrefix + querierName + ":" + id
+	return constant.KlcIDExpirePrefix + querierName + ":" + id
 }
 
 var (

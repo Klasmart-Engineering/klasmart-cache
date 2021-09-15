@@ -6,6 +6,7 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/global"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/model"
 	"gitlab.badanamu.com.cn/calmisland/ro"
@@ -78,8 +79,10 @@ func main() {
 	initQuerier(ctx)
 
 	test(ctx)
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 4)
 
 	//cache.GetCacheEngine().Clean(ctx, constant.QuerierA, ids)
 	//time.Sleep(time.Second * 2)
+	fmt.Printf("%#v\n", statistics.GetHitRatioRecorder().GetCurrentHitRatio(ctx))
+
 }
