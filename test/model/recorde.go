@@ -31,7 +31,7 @@ func (a RecordEEntity) Equal(o cache.Object) bool {
 type RecordEQuerier struct {
 }
 
-func (r *RecordEQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error) {
+func (r *RecordEQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditions, option ...interface{}) ([]string, error) {
 	query, params := condition.GetConditions()
 	paramQuery := strings.Join(query, " and ")
 	recordAList := make([]entity.RecordE, 0)
@@ -46,7 +46,7 @@ func (r *RecordEQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditio
 	}
 	return result, nil
 }
-func (r *RecordEQuerier) BatchGet(ctx context.Context, ids []string) ([]cache.Object, error) {
+func (r *RecordEQuerier) BatchGet(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
 	condition := &RecordACondition{
 		IDs: ids,
 	}

@@ -42,7 +42,7 @@ type fetchObjectDataResponse struct {
 }
 
 type IPassiveRefresher interface {
-	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error
+	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}, options ...interface{}) error
 	SetUpdateFrequency(maxFrequency, minFrequency time.Duration)
 }
 
@@ -65,7 +65,8 @@ func (c *PassiveRefresher) SetUpdateFrequency(maxFrequency, minFrequency time.Du
 func (c *PassiveRefresher) BatchGet(ctx context.Context,
 	querierName string,
 	ids []string,
-	res interface{}) error {
+	res interface{},
+	options ...interface{}) error {
 	querier, exists := c.engine.querierMap[querierName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
@@ -84,7 +85,7 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 		return err
 	}
 
-	objs, err := c.fetchData(ctx, querier, client, ids, result)
+	objs, err := c.fetchData(ctx, querier, client, ids, result, options)
 	if err != nil {
 		log.Error(ctx, "fetchData failed", log.Err(err),
 			log.Strings("ids", ids),
@@ -139,7 +140,8 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	querier IQuerier,
 	client *redis.Client,
 	ids []string,
-	result *ReflectObjectSlice) (*fetchObjectDataResponse, error) {
+	result *ReflectObjectSlice,
+	options ...interface{}) (*fetchObjectDataResponse, error) {
 
 	//query from cache
 	missingIDs := ids
@@ -190,7 +192,7 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	}
 
 	//query from database
-	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs)
+	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs, options)
 	if err != nil {
 		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
 		return nil, err

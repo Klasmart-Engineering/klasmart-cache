@@ -69,7 +69,7 @@ type RecordAQuerier struct {
 func (r *RecordAQuerier) DeleteByID(ctx context.Context, ids []string) error {
 	return global.DBClient.Where("id in (?)", ids).Delete(entity.RecordA{}).Error
 }
-func (r *RecordAQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error) {
+func (r *RecordAQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditions, option ...interface{}) ([]string, error) {
 	query, params := condition.GetConditions()
 	paramQuery := strings.Join(query, " and ")
 	recordAList := make([]entity.RecordA, 0)
@@ -84,7 +84,7 @@ func (r *RecordAQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditio
 	return result, nil
 }
 
-func (r *RecordAQuerier) BatchGet(ctx context.Context, ids []string) ([]cache.Object, error) {
+func (r *RecordAQuerier) BatchGet(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
 	condition := &RecordACondition{
 		IDs: ids,
 	}
