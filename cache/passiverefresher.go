@@ -85,7 +85,7 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 		return err
 	}
 
-	objs, err := c.fetchData(ctx, querier, client, ids, result, options)
+	objs, err := c.fetchData(ctx, querier, client, ids, result, options...)
 	if err != nil {
 		log.Error(ctx, "fetchData failed", log.Err(err),
 			log.Strings("ids", ids),
@@ -192,7 +192,7 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	}
 
 	//query from database
-	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs, options)
+	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs, options...)
 	if err != nil {
 		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
 		return nil, err

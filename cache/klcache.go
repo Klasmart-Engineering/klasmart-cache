@@ -76,7 +76,7 @@ func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []st
 		log.Error(ctx, "fail to create object slice", log.Err(err), log.Any("result", result))
 		return err
 	}
-	return c.doBatchGet(ctx, querierName, ids, s, options)
+	return c.doBatchGet(ctx, querierName, ids, s, options...)
 }
 
 func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []string) {
@@ -109,7 +109,7 @@ func (c *CacheEngine) Query(ctx context.Context, querierName string, condition d
 		return ErrQuerierUnsupportCondition
 	}
 	//query by condition for ids
-	ids, err := conditionQuerier.QueryForIDs(ctx, condition, options)
+	ids, err := conditionQuerier.QueryForIDs(ctx, condition, options...)
 	if err != nil {
 		log.Error(ctx, "GetRedis failed",
 			log.Err(err),
@@ -166,7 +166,7 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 	}
 
 	//query from database
-	missingObjs, err := c.batchGetFromDB(ctx, querier, missingIDs, options)
+	missingObjs, err := c.batchGetFromDB(ctx, querier, missingIDs, options...)
 	if err != nil {
 		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
 		return nil, err
@@ -195,7 +195,7 @@ func (c *CacheEngine) doBatchGet(ctx context.Context,
 		return err
 	}
 
-	missingObjs, err := c.fetchData(ctx, querierName, ids, result, options)
+	missingObjs, err := c.fetchData(ctx, querierName, ids, result, options...)
 
 	//save cache
 	go c.saveCache(ctx, querier, client, missingObjs, 0)
@@ -323,7 +323,7 @@ func (c *CacheEngine) batchGetFromDB(ctx context.Context,
 	//query from database segmented
 	missingObjs := make([]Object, 0, len(missingIDs))
 	utils.SegmentLoop(context.Background(), len(missingIDs), 800, func(start, end int) error {
-		segmentObjs, err := querier.QueryByIDs(ctx, missingIDs[start:end], options)
+		segmentObjs, err := querier.QueryByIDs(ctx, missingIDs[start:end], options...)
 		if err != nil {
 			log.Error(ctx, "QueryByIDs failed",
 				log.Err(err),
