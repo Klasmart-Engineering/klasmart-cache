@@ -24,7 +24,8 @@ var (
 )
 
 const (
-	defaultExpire = time.Minute * 10
+	DefaultExpire  = time.Minute * 10
+	InfiniteExpire = -1
 )
 
 type RelatedEntity struct {
@@ -49,9 +50,9 @@ type Object interface {
 }
 
 type ICacheEngine interface {
-	Query(ctx context.Context, querierName string, condition dbo.Conditions, result interface{}, options ...interface{}) error
+	Query(ctx context.Context, querierName string, condition dbo.Conditions, result interface{}, expireTime time.Duration, options ...interface{}) error
 	Clean(ctx context.Context, querierName string, ids []string)
-	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}, options ...interface{}) error
+	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}, expireTime time.Duration, options ...interface{}) error
 
 	SetExpire(ctx context.Context, duration time.Duration)
 
@@ -70,13 +71,13 @@ func (c *CacheEngine) AddQuerier(ctx context.Context, querier IQuerier) {
 	c.querierMap[querier.ID()] = querier
 }
 
-func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []string, result interface{}, options ...interface{}) error {
+func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []string, result interface{}, expireTime time.Duration, options ...interface{}) error {
 	s, err := NewReflectObjectSlice(result)
 	if err != nil {
 		log.Error(ctx, "fail to create object slice", log.Err(err), log.Any("result", result))
 		return err
 	}
-	return c.doBatchGet(ctx, querierName, ids, s, options...)
+	return c.doBatchGet(ctx, querierName, ids, s, expireTime, options...)
 }
 
 func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []string) {
@@ -93,7 +94,7 @@ func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []strin
 	})
 }
 
-func (c *CacheEngine) Query(ctx context.Context, querierName string, condition dbo.Conditions, result interface{}, options ...interface{}) error {
+func (c *CacheEngine) Query(ctx context.Context, querierName string, condition dbo.Conditions, result interface{}, expireTime time.Duration, options ...interface{}) error {
 	querier, exists := c.querierMap[querierName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
@@ -118,7 +119,7 @@ func (c *CacheEngine) Query(ctx context.Context, querierName string, condition d
 		return err
 	}
 
-	return c.BatchGet(ctx, querierName, ids, result)
+	return c.BatchGet(ctx, querierName, ids, result, expireTime)
 }
 
 func (c *CacheEngine) fetchData(ctx context.Context,
@@ -181,6 +182,7 @@ func (c *CacheEngine) doBatchGet(ctx context.Context,
 	querierName string,
 	ids []string,
 	result *ReflectObjectSlice,
+	expireTime time.Duration,
 	options ...interface{}) error {
 	querier, exists := c.querierMap[querierName]
 	if !exists {
@@ -198,7 +200,7 @@ func (c *CacheEngine) doBatchGet(ctx context.Context,
 	missingObjs, err := c.fetchData(ctx, querierName, ids, result, options...)
 
 	//save cache
-	go c.saveCache(ctx, querier, client, missingObjs, 0)
+	go c.saveCache(ctx, querier, client, missingObjs, expireTime)
 	return nil
 }
 
@@ -505,7 +507,7 @@ func GetCacheEngine() *CacheEngine {
 	_cacheEngineOnce.Do(func() {
 		_cacheEngine = &CacheEngine{
 			querierMap: make(map[string]IQuerier),
-			expireTime: defaultExpire,
+			expireTime: DefaultExpire,
 		}
 	})
 	return _cacheEngine

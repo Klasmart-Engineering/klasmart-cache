@@ -365,8 +365,8 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 			if expiredObj.expiredInfo == nil {
 				expiredObj.expiredInfo = &CacheExpire{
 					ID:             obj.StringID(),
-					ExpireAt:       now.Add(defaultExpire),
-					ExpireDuration: defaultExpire,
+					ExpireAt:       now.Add(DefaultExpire),
+					ExpireDuration: DefaultExpire,
 				}
 			}
 			fbe := &entity.FeedbackEntry{
