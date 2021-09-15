@@ -56,11 +56,11 @@ func (h *HitRatioRecorder) AddHitRatio(ctx context.Context, hitCount, missingCou
 		log.Int("missingCount", missingCount),
 		log.String("hitKey", hitKey),
 		log.String("missKey", missKey))
-	err = redis.SetNX(hitKey, "0", -1).Err()
+	err = redis.SetNX(hitKey, "0", 0).Err()
 	if err != nil {
 		log.Warn(ctx, "Set redis hit key failed", log.Err(err))
 	}
-	err = redis.SetNX(missKey, "0", -1).Err()
+	err = redis.SetNX(missKey, "0", 0).Err()
 	if err != nil {
 		log.Warn(ctx, "Set redis miss key failed", log.Err(err))
 	}
