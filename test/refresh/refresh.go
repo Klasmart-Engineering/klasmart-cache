@@ -42,11 +42,11 @@ var ids = []string{
 }
 
 func initQuerier(ctx context.Context) {
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetAQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetBQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetCQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetDQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetEQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetAQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetBQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetCQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetDQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetEQuerier())
 }
 
 func test(ctx context.Context) {

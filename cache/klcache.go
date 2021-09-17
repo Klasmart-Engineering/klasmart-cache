@@ -55,7 +55,7 @@ type ICacheEngine interface {
 
 	SetExpire(ctx context.Context, duration time.Duration)
 
-	AddQuerier(ctx context.Context, querier IDataSource)
+	AddDataSource(ctx context.Context, querier IDataSource)
 }
 type CacheEngine struct {
 	querierMap map[string]IDataSource
@@ -66,7 +66,7 @@ func (c *CacheEngine) SetExpire(ctx context.Context, duration time.Duration) {
 	c.expireTime = duration
 }
 
-func (c *CacheEngine) AddQuerier(ctx context.Context, querier IDataSource) {
+func (c *CacheEngine) AddDataSource(ctx context.Context, querier IDataSource) {
 	c.querierMap[querier.Name()] = querier
 }
 
