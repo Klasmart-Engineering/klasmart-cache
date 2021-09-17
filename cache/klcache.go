@@ -26,6 +26,7 @@ var (
 const (
 	DefaultExpire  = time.Minute * 10
 	InfiniteExpire = -1
+	EngineExpire   = 0
 )
 
 type RelatedEntity struct {
