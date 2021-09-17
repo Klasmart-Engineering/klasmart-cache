@@ -3,6 +3,10 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"reflect"
+	"sync"
+	"time"
+
 	"github.com/go-redis/redis"
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
@@ -11,9 +15,6 @@ import (
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
 	"gitlab.badanamu.com.cn/calmisland/ro"
-	"reflect"
-	"sync"
-	"time"
 )
 
 const (
@@ -44,12 +45,14 @@ type fetchObjectDataResponse struct {
 type IPassiveRefresher interface {
 	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}, options ...interface{}) error
 	SetUpdateFrequency(maxFrequency, minFrequency time.Duration)
+	SetExpireCalculator(expireCalculator expirecalculator.IExpireCalculator)
 }
 
 type PassiveRefresher struct {
 	engine             *CacheEngine
 	maxUpdateFrequency time.Duration
 	minUpdateFrequency time.Duration
+	expiredCalculator  expirecalculator.IExpireCalculator
 }
 
 func (c *PassiveRefresher) SetUpdateFrequency(maxFrequency, minFrequency time.Duration) {
@@ -60,6 +63,10 @@ func (c *PassiveRefresher) SetUpdateFrequency(maxFrequency, minFrequency time.Du
 	}
 	c.maxUpdateFrequency = maxFrequency
 	c.minUpdateFrequency = minFrequency
+}
+
+func (c *PassiveRefresher) SetExpireCalculator(expireCalculator expirecalculator.IExpireCalculator) {
+	c.expiredCalculator = expireCalculator
 }
 
 func (c *PassiveRefresher) BatchGet(ctx context.Context,
@@ -230,7 +237,7 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 	//calculate expire time
 	feedbackRecord := make([]*entity.FeedbackRecordEntry, len(feedbackEntities))
 	for i := range feedbackEntities {
-		expireTime := expirecalculator.GetExpireCalculator().Calculate(ctx, feedbackEntities[i])
+		expireTime := c.expiredCalculator.Calculate(ctx, feedbackEntities[i])
 		//limit time
 		expireTime = c.expireLimit(expireTime)
 		feedbackRecord[i] = &entity.FeedbackRecordEntry{
@@ -543,6 +550,7 @@ func GetPassiveCacheRefresher() *PassiveRefresher {
 			engine:             GetCacheEngine(),
 			maxUpdateFrequency: defaultUpdateMaxFrequency,
 			minUpdateFrequency: defaultUpdateMinFrequency,
+			expiredCalculator:  expirecalculator.GetExpireCalculator(),
 		}
 	})
 	return _cachePassiveRefresherEngine

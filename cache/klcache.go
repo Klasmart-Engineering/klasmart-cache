@@ -40,7 +40,6 @@ type IConditionQuerier interface {
 
 type IQuerier interface {
 	QueryByIDs(ctx context.Context, ids []string, options ...interface{}) ([]Object, error)
-
 	ID() string
 }
 

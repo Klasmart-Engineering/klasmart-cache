@@ -80,10 +80,10 @@ func queryCByDB(ctx context.Context, prefix string) {
 
 func queryAByCache(ctx context.Context, prefix string) {
 	for i := 0; i < 1; i++ {
-		res := make([]cache.Object, 0)
+		res := make([]model.RecordAEntity, 0)
 		err := cache.GetCacheEngine().Query(ctx, constant.QuerierA, &model.RecordACondition{
 			NameLike: prefix,
-		}, &res)
+		}, &res, time.Second * 20)
 		if err != nil {
 			fmt.Println("query failed, err:", err)
 			continue
@@ -96,7 +96,7 @@ func queryBByCache(ctx context.Context, prefix string) {
 		res := make([]cache.Object, 0)
 		err := cache.GetCacheEngine().Query(ctx, constant.QuerierB, &model.RecordBCondition{
 			NameLike: prefix,
-		}, &res)
+		}, &res, cache.DefaultExpire)
 		fmt.Println("res:", res)
 		if err != nil {
 			fmt.Println("query failed, err:", err)
@@ -110,7 +110,7 @@ func queryCByCache(ctx context.Context, prefix string) {
 		res := make([]cache.Object, 0)
 		err := cache.GetCacheEngine().Query(ctx, constant.QuerierC, &model.RecordCCondition{
 			NameLike: prefix,
-		}, &res)
+		}, &res, cache.DefaultExpire)
 		fmt.Println("res:", res)
 		if err != nil {
 			fmt.Println("query failed, err:", err)
@@ -230,5 +230,5 @@ func main() {
 	global.DBClient = db
 	initQuerier(ctx)
 
-	test4(ctx)
+	test1(ctx)
 }
