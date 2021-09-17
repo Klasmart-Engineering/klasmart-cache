@@ -144,7 +144,7 @@ func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
 }
 
 func (c *PassiveRefresher) fetchData(ctx context.Context,
-	querier IQuerier,
+	querier IDataSource,
 	client *redis.Client,
 	ids []string,
 	result *ReflectObjectSlice,
@@ -162,11 +162,11 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 		}
 	}
 	//check hitIDs and add expiredIDs into missingIDs
-	expiredObjects, err := c.fetchExpiredData(ctx, client, querier.ID(), hitIDs, result)
+	expiredObjects, err := c.fetchExpiredData(ctx, client, querier.Name(), hitIDs, result)
 	if err != nil {
 		log.Error(ctx, "fetchExpiredData failed",
 			log.Err(err),
-			log.String("querier name", querier.ID()),
+			log.String("querier name", querier.Name()),
 			log.Strings("hitIDs", hitIDs))
 		return nil, err
 	}
@@ -218,18 +218,18 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	}, nil
 }
 func (c *PassiveRefresher) saveCache(ctx context.Context,
-	querier IQuerier,
+	querier IDataSource,
 	client *redis.Client,
 	ids []string,
 	objs *fetchObjectDataResponse) {
 
 	// maybe needs mutex
 	//idCaches, objMap := c.fetchObjects(ctx, ids, missingObjs)
-	feedbackEntities, err := c.fetchFeedback(ctx, querier.ID(), objs)
+	feedbackEntities, err := c.fetchFeedback(ctx, querier.Name(), objs)
 	if err != nil {
 		log.Error(ctx, "failed to fetch expirecalculator",
 			log.Err(err),
-			log.String("querierName", querier.ID()),
+			log.String("querierName", querier.Name()),
 			log.Any("objs", objs))
 		return
 	}
@@ -253,7 +253,7 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 	}
 
 	//save expirecalculator info
-	c.saveFeedback(ctx, client, querier.ID(), feedbackRecord)
+	c.saveFeedback(ctx, client, querier.Name(), feedbackRecord)
 }
 
 func (c *PassiveRefresher) fetchObjects(ctx context.Context,

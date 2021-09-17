@@ -31,7 +31,7 @@ func (a RecordCEntity) Equal(o cache.Object) bool {
 type RecordCQuerier struct {
 }
 
-func (r *RecordCQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditions, option ...interface{}) ([]string, error) {
+func (r *RecordCQuerier) ConditionQueryForIDs(ctx context.Context, condition dbo.Conditions, option ...interface{}) ([]string, error) {
 	query, params := condition.GetConditions()
 	paramQuery := strings.Join(query, " and ")
 	recordAList := make([]entity.RecordC, 0)
@@ -75,7 +75,7 @@ func (r *RecordCQuerier) UnmarshalObject(ctx context.Context, jsonData string) (
 	return record, nil
 }
 
-func (r *RecordCQuerier) ID() string {
+func (r *RecordCQuerier) Name() string {
 	return constant.QuerierC
 }
 
@@ -106,11 +106,11 @@ func (r *RecordCCondition) GetOrderBy() string {
 }
 
 var (
-	_recordCQuerier     cache.IConditionQuerier
+	_recordCQuerier     cache.IConditionalDataSource
 	_recordCQuerierOnce sync.Once
 )
 
-func GetCQuerier() cache.IConditionQuerier {
+func GetCQuerier() cache.IConditionalDataSource {
 	_recordCQuerierOnce.Do(func() {
 		_recordCQuerier = new(RecordCQuerier)
 	})

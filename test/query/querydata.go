@@ -27,7 +27,7 @@ func randChar() string {
 }
 func queryAByDB(ctx context.Context, prefix string) {
 	for i := 0; i < 1; i++ {
-		ids, err := model.GetAQuerier().QueryForIDs(ctx, &model.RecordACondition{
+		ids, err := model.GetAQuerier().ConditionQueryForIDs(ctx, &model.RecordACondition{
 			NameLike: prefix,
 		})
 		if err != nil {
@@ -44,7 +44,7 @@ func queryAByDB(ctx context.Context, prefix string) {
 
 func queryBByDB(ctx context.Context, prefix string) {
 	for i := 0; i < 1; i++ {
-		ids, err := model.GetBQuerier().QueryForIDs(ctx, &model.RecordBCondition{
+		ids, err := model.GetBQuerier().ConditionQueryForIDs(ctx, &model.RecordBCondition{
 			NameLike: prefix,
 		})
 		if err != nil {
@@ -62,7 +62,7 @@ func queryBByDB(ctx context.Context, prefix string) {
 
 func queryCByDB(ctx context.Context, prefix string) {
 	for i := 0; i < 1; i++ {
-		ids, err := model.GetCQuerier().QueryForIDs(ctx, &model.RecordCCondition{
+		ids, err := model.GetCQuerier().ConditionQueryForIDs(ctx, &model.RecordCCondition{
 			NameLike: prefix,
 		})
 		if err != nil {
@@ -83,7 +83,7 @@ func queryAByCache(ctx context.Context, prefix string) {
 		res := make([]model.RecordAEntity, 0)
 		err := cache.GetCacheEngine().Query(ctx, constant.QuerierA, &model.RecordACondition{
 			NameLike: prefix,
-		}, &res, time.Second * 20)
+		}, &res, time.Second*20)
 		if err != nil {
 			fmt.Println("query failed, err:", err)
 			continue
@@ -184,7 +184,7 @@ func test3(ctx context.Context) {
 	calculateAvgTime(ctx, queryCByCache, queryCByDB)
 }
 func test4(ctx context.Context) {
-	ids, err := model.GetAQuerier().QueryForIDs(ctx, &model.RecordACondition{
+	ids, err := model.GetAQuerier().ConditionQueryForIDs(ctx, &model.RecordACondition{
 		NameLike: "e",
 	})
 	if err != nil {

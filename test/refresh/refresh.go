@@ -52,11 +52,11 @@ func initQuerier(ctx context.Context) {
 func test(ctx context.Context) {
 	entities := make([]*model.RecordAEntity, 0)
 	for i := 0; i < 1; i++ {
-		err := cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().ID(), ids, &entities)
+		err := cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().Name(), ids, &entities)
 		if err != nil {
 			panic(err)
 		}
-		err = cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().ID(), ids, &entities)
+		err = cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().Name(), ids, &entities)
 		if err != nil {
 			panic(err)
 		}
