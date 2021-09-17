@@ -43,7 +43,7 @@ type fetchObjectDataResponse struct {
 }
 
 type IPassiveRefresher interface {
-	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}, options ...interface{}) error
+	BatchGet(ctx context.Context, dataSourceName string, ids []string, result interface{}, options ...interface{}) error
 	SetUpdateFrequency(maxFrequency, minFrequency time.Duration)
 	SetExpireCalculator(expireCalculator expirecalculator.IExpireCalculator)
 }
@@ -70,14 +70,14 @@ func (c *PassiveRefresher) SetExpireCalculator(expireCalculator expirecalculator
 }
 
 func (c *PassiveRefresher) BatchGet(ctx context.Context,
-	querierName string,
+	dataSourceName string,
 	ids []string,
 	res interface{},
 	options ...interface{}) error {
-	querier, exists := c.engine.querierMap[querierName]
+	querier, exists := c.engine.querierMap[dataSourceName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
-			log.String("querierName", querierName),
+			log.String("dataSourceName", dataSourceName),
 			log.Any("querierMap", c.engine.querierMap))
 		return ErrUnknownQuerier
 	}
@@ -96,7 +96,7 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 	if err != nil {
 		log.Error(ctx, "fetchData failed", log.Err(err),
 			log.Strings("ids", ids),
-			log.String("querierName", querierName))
+			log.String("dataSourceName", dataSourceName))
 		return err
 	}
 
@@ -242,7 +242,7 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 		expireTime = c.expireLimit(expireTime)
 		feedbackRecord[i] = &entity.FeedbackRecordEntry{
 			ID:              feedbackEntities[i].ID,
-			QuerierName:     feedbackEntities[i].QuerierName,
+			DataSourceName:  feedbackEntities[i].DataSourceName,
 			CurrentFeedback: feedbackEntities[i].CurrentFeedback,
 			ExpireTime:      expireTime,
 		}
@@ -378,7 +378,7 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 			}
 			fbe := &entity.FeedbackEntry{
 				ID:              obj.StringID(),
-				QuerierName:     querierName,
+				DataSourceName:  querierName,
 				CurrentFeedback: entity.FeedbackChanged,
 				RecentFeedback:  idDataMap[obj.StringID()],
 				GlobalFeedback:  globalData,
@@ -398,7 +398,7 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 
 		result = append(result, &entity.FeedbackEntry{
 			ID:              obj.StringID(),
-			QuerierName:     querierName,
+			DataSourceName:  querierName,
 			CurrentFeedback: entity.FeedbackChanged,
 			RecentFeedback:  nil,
 			GlobalFeedback:  globalData,
@@ -451,7 +451,7 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 				log.Err(err))
 			continue
 		}
-		key := idExpirePrefix(newFeedbacks[i].QuerierName, newFeedbacks[i].ID)
+		key := idExpirePrefix(newFeedbacks[i].DataSourceName, newFeedbacks[i].ID)
 		value := jsonData
 		cachePairs = append(cachePairs, key)
 		cachePairs = append(cachePairs, value)

@@ -26,8 +26,8 @@ func (a RecordDEntity) StringID() string {
 func (a RecordDEntity) RelatedIDs() []*cache.RelatedEntity {
 	return []*cache.RelatedEntity{
 		{
-			QuerierName: constant.QuerierE,
-			RelatedIDs:  []string{a.EID},
+			DataSourceName: constant.QuerierE,
+			RelatedIDs:     []string{a.EID},
 		},
 	}
 }

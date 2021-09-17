@@ -31,12 +31,12 @@ func (c *CacheRefresher) SetRefreshSize(ctx context.Context, refreshSize int64) 
 func (c *CacheRefresher) SetRefreshInterval(ctx context.Context, refreshInterval time.Duration) {
 	c.refreshInterval = refreshInterval
 }
-func (c *CacheRefresher) BatchGet(ctx context.Context, querierName string, ids []string, result *[]Object, refresh bool) error {
-	err := c.engine.BatchGet(ctx, querierName, ids, result, InfiniteExpire)
+func (c *CacheRefresher) BatchGet(ctx context.Context, dataSourceName string, ids []string, result *[]Object, refresh bool) error {
+	err := c.engine.BatchGet(ctx, dataSourceName, ids, result, InfiniteExpire)
 	if err != nil {
 		log.Error(ctx, "QueryByIDs failed",
 			log.Err(err),
-			log.String("querierName", querierName),
+			log.String("dataSourceName", dataSourceName),
 			log.Strings("ids", ids))
 		return err
 	}
@@ -49,7 +49,7 @@ func (c *CacheRefresher) BatchGet(ctx context.Context, querierName string, ids [
 
 	//if need refresh, enqueue it
 	if refresh {
-		c.enqueueData(ctx, client, querierName, ids)
+		c.enqueueData(ctx, client, dataSourceName, ids)
 	}
 	return nil
 }

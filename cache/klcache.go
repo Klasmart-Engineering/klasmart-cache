@@ -29,8 +29,8 @@ const (
 )
 
 type RelatedEntity struct {
-	QuerierName string
-	RelatedIDs  []string
+	DataSourceName string
+	RelatedIDs     []string
 }
 
 type IConditionalDataSource interface {
@@ -297,11 +297,11 @@ func (c *CacheEngine) cleanRelatedIDs(ctx context.Context, client *redis.Client,
 				log.Strings("ids", ids))
 			return err
 		}
-		err = c.doClean(ctx, relatedEntity.QuerierName, relatedEntity.RelatedIDs)
+		err = c.doClean(ctx, relatedEntity.DataSourceName, relatedEntity.RelatedIDs)
 		if err != nil {
 			log.Error(ctx, "Clean failed",
 				log.Err(err),
-				log.String("querierName", relatedEntity.QuerierName),
+				log.String("querierName", relatedEntity.DataSourceName),
 				log.Strings("relatedIDs", relatedEntity.RelatedIDs))
 			return err
 		}
@@ -423,7 +423,7 @@ func (c *CacheEngine) handleRelatedEntity(ctx context.Context,
 	relatedEntity *RelatedEntity,
 	relatedIDMap map[string]map[string][]interface{}) map[string]map[string][]interface{} {
 	for i := range relatedEntity.RelatedIDs {
-		querierNameMap, exist := relatedIDMap[relatedEntity.QuerierName]
+		querierNameMap, exist := relatedIDMap[relatedEntity.DataSourceName]
 		if !exist {
 			querierNameMap = make(map[string][]interface{})
 		}
@@ -434,7 +434,7 @@ func (c *CacheEngine) handleRelatedEntity(ctx context.Context,
 		querierIDMap = append(querierIDMap, objectID)
 
 		querierNameMap[relatedEntity.RelatedIDs[i]] = querierIDMap
-		relatedIDMap[relatedEntity.QuerierName] = querierNameMap
+		relatedIDMap[relatedEntity.DataSourceName] = querierNameMap
 	}
 	return relatedIDMap
 }
