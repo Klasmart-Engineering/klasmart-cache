@@ -184,7 +184,7 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 
 	//all in cache
 	if missingIDsCount < 1 {
-		log.Info(ctx, "All in cache")
+		log.Info(ctx, "All in cache", log.Any("result", result.slice.Interface()))
 		return &fetchObjectDataResponse{
 			dbObjects:      nil,
 			expiredObjects: expiredObjects,
@@ -195,7 +195,7 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	} else {
 		log.Info(ctx, "Parts in cache",
 			log.Strings("missing IDs", missingIDs),
-			log.Strings("all ids", ids))
+			log.Strings("all ids", ids), log.Any("result", result.slice.Interface()))
 	}
 
 	//query from database
