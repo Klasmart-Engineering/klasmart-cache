@@ -102,7 +102,7 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 
 	if len(objs.dbObjects) > 0 {
 		//save cache
-		go c.saveCache(ctx, querier, client, ids, objs)
+		go c.saveCache(ctx, querier, client, objs)
 	}
 
 	return nil
@@ -220,7 +220,6 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 func (c *PassiveRefresher) saveCache(ctx context.Context,
 	querier IDataSource,
 	client *redis.Client,
-	ids []string,
 	objs *fetchObjectDataResponse) {
 
 	// maybe needs mutex
@@ -248,7 +247,7 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 		}
 
 		if objs.dbObjects[feedbackEntities[i].ID] != nil {
-			c.engine.saveCache(ctx, querier, client, []Object{objs.dbObjects[feedbackEntities[i].ID]}, time.Duration(-1))
+			c.engine.saveCache(ctx, querier, client, []Object{objs.dbObjects[feedbackEntities[i].ID]}, MaxExpireTime)
 		}
 	}
 
@@ -437,7 +436,8 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 	client *redis.Client,
 	newFeedbacks []*entity.FeedbackRecordEntry) {
 
-	cachePairs := make([]interface{}, len(newFeedbacks)*2)
+	cachePairs := make([]interface{}, 0, len(newFeedbacks)*2)
+	keys := make([]string, len(newFeedbacks))
 	now := time.Now()
 	for i := range newFeedbacks {
 		expireData := &CacheExpire{
@@ -455,8 +455,12 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 		value := jsonData
 		cachePairs = append(cachePairs, key)
 		cachePairs = append(cachePairs, value)
+		keys[i] = key
 	}
 	client.MSet(cachePairs...)
+	for i := range keys {
+		client.Expire(keys[i], MaxExpireTime)
+	}
 }
 
 func (c *PassiveRefresher) fetchExpireTime(ctx context.Context,

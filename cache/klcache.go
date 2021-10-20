@@ -27,6 +27,8 @@ const (
 	DefaultExpire  = time.Minute * 10
 	InfiniteExpire = -1
 	EngineExpire   = 0
+
+	MaxExpireTime = time.Hour * 24
 )
 
 type RelatedEntity struct {
