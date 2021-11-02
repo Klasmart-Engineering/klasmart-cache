@@ -81,14 +81,19 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 			log.Any("querierMap", c.engine.querierMap))
 		return ErrUnknownQuerier
 	}
-	client, err := ro.GetRedis(ctx)
-	if err != nil {
-		log.Error(ctx, "GetRedis failed", log.Err(err))
-		return err
-	}
 	result, err := NewReflectObjectSlice(res)
 	if err != nil {
 		log.Error(ctx, "NewReflectObjectSlice failed", log.Err(err), log.Any("res", res))
+		return err
+	}
+	//close cache
+	if !c.engine.open {
+		return c.engine.doBatchGetFromDB(ctx, dataSourceName, ids, result, options...)
+	}
+
+	client, err := ro.GetRedis(ctx)
+	if err != nil {
+		log.Error(ctx, "GetRedis failed", log.Err(err))
 		return err
 	}
 
@@ -107,6 +112,7 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 
 	return nil
 }
+
 
 func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
 	client *redis.Client,

@@ -57,12 +57,14 @@ type ICacheEngine interface {
 	BatchGet(ctx context.Context, dataSourceName string, ids []string, result interface{}, expireTime time.Duration, options ...interface{}) error
 
 	SetExpire(ctx context.Context, duration time.Duration)
+	OpenCache(ctx context.Context, open bool)
 
 	AddDataSource(ctx context.Context, querier IDataSource)
 }
 type CacheEngine struct {
 	querierMap map[string]IDataSource
 	expireTime time.Duration
+	open bool
 }
 
 func (c *CacheEngine) SetExpire(ctx context.Context, duration time.Duration) {
@@ -79,10 +81,33 @@ func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []st
 		log.Error(ctx, "fail to create object slice", log.Err(err), log.Any("result", result))
 		return err
 	}
+	if !c.open {
+		return c.doBatchGetFromDB(ctx, querierName, ids, s, options...)
+	}
 	return c.doBatchGet(ctx, querierName, ids, s, expireTime, options...)
 }
 
+func (c *CacheEngine) doBatchGetFromDB(ctx context.Context, querierName string, ids []string, result *ReflectObjectSlice, options ...interface{}) error{
+	querier, exists := c.querierMap[querierName]
+	if !exists {
+		log.Error(ctx, "GetRedis failed",
+			log.String("querierName", querierName),
+			log.Any("querierMap", c.querierMap))
+		return ErrUnknownQuerier
+	}
+	objs, err := c.batchGetFromDB(ctx, querier, ids, options...)
+	if err != nil {
+		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
+		return err
+	}
+	result.Append(objs...)
+	return nil
+}
+
 func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []string) {
+	if !c.open {
+		return
+	}
 	c.doubleDelete(ctx, func() {
 		err := c.doClean(ctx, querierName, ids)
 		if err != nil {
@@ -94,6 +119,10 @@ func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []strin
 		}
 
 	})
+}
+
+func (c *CacheEngine) OpenCache(ctx context.Context, open bool){
+	c.open = open
 }
 
 func (c *CacheEngine) Query(ctx context.Context, querierName string, condition dbo.Conditions, result interface{}, expireTime time.Duration, options ...interface{}) error {
@@ -511,6 +540,7 @@ func GetCacheEngine() *CacheEngine {
 		_cacheEngine = &CacheEngine{
 			querierMap: make(map[string]IDataSource),
 			expireTime: DefaultExpire,
+			open: true,
 		}
 	})
 	return _cacheEngine

@@ -40,6 +40,9 @@ func (c *CacheRefresher) BatchGet(ctx context.Context, dataSourceName string, id
 			log.Strings("ids", ids))
 		return err
 	}
+	if !c.engine.open {
+		return nil
+	}
 
 	client, err := ro.GetRedis(ctx)
 	if err != nil {
