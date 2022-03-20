@@ -2,10 +2,11 @@ package statistics
 
 import (
 	"context"
+	"time"
+
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
 	"gitlab.badanamu.com.cn/calmisland/ro"
-	"time"
 )
 
 type HitRatioResponse struct {
@@ -27,13 +28,13 @@ func (h *HitRatioRecorder) GetCurrentHitRatio(ctx context.Context) *HitRatioResp
 		log.Error(ctx, "Can't connect to redis", log.Err(err))
 		return nil
 	}
-	hit, err := redis.Get(hitKey).Int()
+	hit, err := redis.Get(ctx, hitKey).Int()
 	if err != nil {
 		hit = 0
 		log.Warn(ctx, "Get hit count failed", log.Err(err))
 	}
 
-	miss, err := redis.Get(missKey).Int()
+	miss, err := redis.Get(ctx, missKey).Int()
 	if err != nil {
 		miss = 0
 		log.Warn(ctx, "Get miss count failed", log.Err(err))
@@ -56,21 +57,21 @@ func (h *HitRatioRecorder) AddHitRatio(ctx context.Context, hitCount, missingCou
 		log.Int("missingCount", missingCount),
 		log.String("hitKey", hitKey),
 		log.String("missKey", missKey))
-	err = redis.SetNX(hitKey, "0", 0).Err()
+	err = redis.SetNX(ctx, hitKey, "0", 0).Err()
 	if err != nil {
 		log.Warn(ctx, "Set redis hit key failed", log.Err(err))
 	}
-	err = redis.SetNX(missKey, "0", 0).Err()
+	err = redis.SetNX(ctx, missKey, "0", 0).Err()
 	if err != nil {
 		log.Warn(ctx, "Set redis miss key failed", log.Err(err))
 	}
 
-	err = redis.IncrBy(hitKey, int64(hitCount)).Err()
+	err = redis.IncrBy(ctx, hitKey, int64(hitCount)).Err()
 	if err != nil {
 		log.Error(ctx, "Add redis hit count failed", log.Err(err))
 		return
 	}
-	err = redis.IncrBy(missKey, int64(missingCount)).Err()
+	err = redis.IncrBy(ctx, missKey, int64(missingCount)).Err()
 	if err != nil {
 		log.Error(ctx, "Add redis miss count failed", log.Err(err))
 		return

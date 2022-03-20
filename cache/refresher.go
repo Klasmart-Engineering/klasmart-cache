@@ -2,13 +2,14 @@ package cache
 
 import (
 	"context"
-	"github.com/go-redis/redis"
-	"gitlab.badanamu.com.cn/calmisland/common-log/log"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
-	"gitlab.badanamu.com.cn/calmisland/ro"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-redis/redis/v8"
+	"gitlab.badanamu.com.cn/calmisland/common-log/log"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
+	"gitlab.badanamu.com.cn/calmisland/ro"
 )
 
 const (
@@ -115,11 +116,11 @@ func (c *CacheRefresher) enqueueData(ctx context.Context, client *redis.Client, 
 	for i := range ids {
 		values[i] = querierName + constant.KlcIDSeparator + ids[i]
 	}
-	client.SAdd(constant.KlcRefreshPrefix, values...)
+	client.SAdd(ctx, constant.KlcRefreshPrefix, values...)
 }
 
 func (c *CacheRefresher) dequeueData(ctx context.Context, client *redis.Client) (map[string][]string, error) {
-	data, err := client.SPopN(constant.KlcRefreshPrefix, c.refreshSize).Result()
+	data, err := client.SPopN(ctx, constant.KlcRefreshPrefix, c.refreshSize).Result()
 	if err != nil {
 		log.Error(ctx, "pop redis set failed",
 			log.Err(err))

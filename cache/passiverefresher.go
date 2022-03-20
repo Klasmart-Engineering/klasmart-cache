@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/entity"
@@ -112,7 +112,6 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 
 	return nil
 }
-
 
 func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
 	client *redis.Client,
@@ -296,9 +295,9 @@ func (c *PassiveRefresher) saveFeedback(ctx context.Context,
 	}
 
 	//save global data
-	client.LPush(constant.KlcGlobalFeedbackPrefix, globalData...)
+	client.LPush(ctx, constant.KlcGlobalFeedbackPrefix, globalData...)
 	//save group data
-	client.LPush(constant.KlcGroupFeedbackPrefix+querierName, groupData...)
+	client.LPush(ctx, constant.KlcGroupFeedbackPrefix+querierName, groupData...)
 
 	//pending clean key list
 	cleanKeyList := []string{
@@ -309,7 +308,7 @@ func (c *PassiveRefresher) saveFeedback(ctx context.Context,
 	//save id data
 	for i := range newFeedback {
 		key := idFeedbackPrefix(querierName, newFeedback[i].ID)
-		client.LPush(key, newFeedback[i].CurrentFeedback)
+		client.LPush(ctx, key, newFeedback[i].CurrentFeedback)
 		cleanKeyList = append(cleanKeyList, key)
 	}
 
@@ -323,7 +322,7 @@ func (c *PassiveRefresher) saveFeedback(ctx context.Context,
 func (c *PassiveRefresher) cleanRedisList(ctx context.Context, client *redis.Client, keys []string) {
 	//TODO: needs to lock
 	for i := range keys {
-		size, err := client.LLen(keys[i]).Result()
+		size, err := client.LLen(ctx, keys[i]).Result()
 		if err != nil {
 			log.Error(ctx, "LLen failed", log.Err(err))
 			return
@@ -331,7 +330,7 @@ func (c *PassiveRefresher) cleanRedisList(ctx context.Context, client *redis.Cli
 		cleanCount := int(size - entity.FeedbackRecordSize)
 		if cleanCount > entity.FeedbackRecordSize*10 {
 			for j := 0; j < cleanCount; j++ {
-				client.RPop(keys[i])
+				client.RPop(ctx, keys[i])
 			}
 		}
 	}
@@ -421,7 +420,7 @@ func (c *PassiveRefresher) fetchIDFeedback(ctx context.Context,
 
 	idDataMap := make(map[string][]int)
 	for i := range ids {
-		idRaw, err := client.LRange(idFeedbackPrefix(querierName, ids[i]), 0, entity.FeedbackRecordSize).Result()
+		idRaw, err := client.LRange(ctx, idFeedbackPrefix(querierName, ids[i]), 0, entity.FeedbackRecordSize).Result()
 		if err == redis.Nil {
 			continue
 		}
@@ -463,9 +462,9 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 		cachePairs = append(cachePairs, value)
 		keys[i] = key
 	}
-	client.MSet(cachePairs...)
+	client.MSet(ctx, cachePairs...)
 	for i := range keys {
-		client.Expire(keys[i], MaxExpireTime)
+		client.Expire(ctx, keys[i], MaxExpireTime)
 	}
 }
 
@@ -478,7 +477,7 @@ func (c *PassiveRefresher) fetchExpireTime(ctx context.Context,
 		return nil, nil
 	}
 	keys := c.engine.keyList(querierName, ids, idExpirePrefix)
-	expireData, err := client.MGet(keys...).Result()
+	expireData, err := client.MGet(ctx, keys...).Result()
 	//handle nil
 	if err != nil {
 		log.Error(ctx, "GetRedis failed", log.Err(err), log.Strings("keys", keys))
@@ -509,7 +508,7 @@ func (c *PassiveRefresher) fetchGlobalGroupFeedback(ctx context.Context,
 	var globalData []int
 	var groupData []int
 
-	globalRaw, err := client.LRange(constant.KlcGlobalFeedbackPrefix, 0, entity.FeedbackRecordSize).Result()
+	globalRaw, err := client.LRange(ctx, constant.KlcGlobalFeedbackPrefix, 0, entity.FeedbackRecordSize).Result()
 	if err != redis.Nil {
 		if err != nil {
 			log.Error(ctx, "Redis LRange global failed",
@@ -519,7 +518,7 @@ func (c *PassiveRefresher) fetchGlobalGroupFeedback(ctx context.Context,
 		globalData = utils.StringsToInts(ctx, globalRaw)
 	}
 
-	groupRaw, err := client.LRange(constant.KlcGroupFeedbackPrefix+querierName, 0, entity.FeedbackRecordSize).Result()
+	groupRaw, err := client.LRange(ctx, constant.KlcGroupFeedbackPrefix+querierName, 0, entity.FeedbackRecordSize).Result()
 	if err != redis.Nil {
 		if err != nil {
 			log.Error(ctx, "Redis LRange group failed",

@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"gitlab.badanamu.com.cn/calmisland/dbo"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
 	"gitlab.badanamu.com.cn/calmisland/ro"
 )
 
@@ -64,7 +64,7 @@ type ICacheEngine interface {
 type CacheEngine struct {
 	querierMap map[string]IDataSource
 	expireTime time.Duration
-	open bool
+	open       bool
 }
 
 func (c *CacheEngine) SetExpire(ctx context.Context, duration time.Duration) {
@@ -87,7 +87,7 @@ func (c *CacheEngine) BatchGet(ctx context.Context, querierName string, ids []st
 	return c.doBatchGet(ctx, querierName, ids, s, expireTime, options...)
 }
 
-func (c *CacheEngine) doBatchGetFromDB(ctx context.Context, querierName string, ids []string, result *ReflectObjectSlice, options ...interface{}) error{
+func (c *CacheEngine) doBatchGetFromDB(ctx context.Context, querierName string, ids []string, result *ReflectObjectSlice, options ...interface{}) error {
 	querier, exists := c.querierMap[querierName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
@@ -121,7 +121,7 @@ func (c *CacheEngine) Clean(ctx context.Context, querierName string, ids []strin
 	})
 }
 
-func (c *CacheEngine) OpenCache(ctx context.Context, open bool){
+func (c *CacheEngine) OpenCache(ctx context.Context, open bool) {
 	c.open = open
 }
 
@@ -267,7 +267,7 @@ func (c *CacheEngine) doClean(ctx context.Context, querierName string, ids []str
 		return err
 	}
 	if len(ids) > 0 {
-		err = client.Del(c.keyList(querier.Name(), ids, c.IDKey)...).Err()
+		err = client.Del(ctx, c.keyList(querier.Name(), ids, c.IDKey)...).Err()
 		if err != nil {
 			log.Error(ctx, "Del ids failed", log.Err(err), log.Strings("ids", ids))
 			return err
@@ -308,7 +308,7 @@ func (c *CacheEngine) cleanRelatedIDs(ctx context.Context, client *redis.Client,
 
 	cacheRelatedRes := make([]string, 0)
 	for i := range keyList {
-		tempRes, err := client.SMembers(keyList[i]).Result()
+		tempRes, err := client.SMembers(ctx, keyList[i]).Result()
 		if err != nil {
 			log.Error(ctx, "QueryByIDs failed",
 				log.Err(err),
@@ -342,7 +342,7 @@ func (c *CacheEngine) cleanRelatedIDs(ctx context.Context, client *redis.Client,
 
 	//delete related
 	if len(keyList) > 0 {
-		err := client.Del(keyList...).Err()
+		err := client.Del(ctx, keyList...).Err()
 		if err != nil {
 			log.Error(ctx, "Del ids failed", log.Err(err), log.Strings("ids", ids))
 			return err
@@ -379,7 +379,7 @@ func (c *CacheEngine) queryForCache(ctx context.Context,
 	result *ReflectObjectSlice) ([]string, []string, error) {
 	missingIDs := make([]string, 0, len(ids))
 	hitIDs := make([]string, 0, len(ids))
-	cacheRes, err := client.MGet(c.keyList(querier.Name(), ids, c.IDKey)...).Result()
+	cacheRes, err := client.MGet(ctx, c.keyList(querier.Name(), ids, c.IDKey)...).Result()
 	if err == redis.Nil {
 		//handle nil
 		fmt.Println("Nil")
@@ -444,9 +444,9 @@ func (c *CacheEngine) saveRelatedIDs(ctx context.Context,
 	for querierName, objectMap := range relatedIDMap {
 		for objectID, relatedIDs := range objectMap {
 			key := c.RelatedIDKey(querierName, objectID)
-			client.SAdd(key, relatedIDs...)
+			client.SAdd(ctx, key, relatedIDs...)
 			if !infinite {
-				client.ExpireAt(key, expireAt)
+				client.ExpireAt(ctx, key, expireAt)
 			}
 		}
 	}
@@ -510,10 +510,10 @@ func (c *CacheEngine) saveCache(ctx context.Context,
 
 		keys[i] = key
 	}
-	client.MSet(cachePairs...)
+	client.MSet(ctx, cachePairs...)
 	if !infinite {
 		for i := range keys {
-			client.ExpireAt(keys[i], expireAt)
+			client.ExpireAt(ctx, keys[i], expireAt)
 		}
 	}
 
@@ -540,7 +540,7 @@ func GetCacheEngine() *CacheEngine {
 		_cacheEngine = &CacheEngine{
 			querierMap: make(map[string]IDataSource),
 			expireTime: DefaultExpire,
-			open: true,
+			open:       true,
 		}
 	})
 	return _cacheEngine
