@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis"
+	"time"
+
+	"github.com/go-redis/redis/v8"
 	"github.com/jinzhu/gorm"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/global"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/model"
 	"gitlab.badanamu.com.cn/calmisland/ro"
-	"time"
 )
 
 const connStr = "root:Badanamu123456@tcp(127.0.0.1:3306)/test?charset=utf8mb4&parseTime=True&loc=Local"
