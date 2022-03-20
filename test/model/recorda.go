@@ -33,16 +33,16 @@ func (a RecordAEntity) StringID() string {
 func (a RecordAEntity) RelatedIDs() []*cache.RelatedEntity {
 	return []*cache.RelatedEntity{
 		{
-			QuerierName: constant.QuerierB,
-			RelatedIDs:  []string{a.BID},
+			DataSourceName: constant.QuerierB,
+			RelatedIDs:     []string{a.BID},
 		},
 		{
-			QuerierName: constant.QuerierC,
-			RelatedIDs:  []string{a.CID},
+			DataSourceName: constant.QuerierC,
+			RelatedIDs:     []string{a.CID},
 		},
 		{
-			QuerierName: constant.QuerierD,
-			RelatedIDs:  []string{a.DID},
+			DataSourceName: constant.QuerierD,
+			RelatedIDs:     []string{a.DID},
 		},
 	}
 }
@@ -69,7 +69,7 @@ type RecordAQuerier struct {
 func (r *RecordAQuerier) DeleteByID(ctx context.Context, ids []string) error {
 	return global.DBClient.Where("id in (?)", ids).Delete(entity.RecordA{}).Error
 }
-func (r *RecordAQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error) {
+func (r *RecordAQuerier) ConditionQueryForIDs(ctx context.Context, condition dbo.Conditions, option ...interface{}) ([]string, error) {
 	query, params := condition.GetConditions()
 	paramQuery := strings.Join(query, " and ")
 	recordAList := make([]entity.RecordA, 0)
@@ -84,7 +84,7 @@ func (r *RecordAQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditio
 	return result, nil
 }
 
-func (r *RecordAQuerier) BatchGet(ctx context.Context, ids []string) ([]cache.Object, error) {
+func (r *RecordAQuerier) QueryByIDs(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
 	condition := &RecordACondition{
 		IDs: ids,
 	}
@@ -126,7 +126,7 @@ func (r *RecordAQuerier) UnmarshalObject(ctx context.Context, jsonData string) (
 	return record, nil
 }
 
-func (r *RecordAQuerier) ID() string {
+func (r *RecordAQuerier) Name() string {
 	return constant.QuerierA
 }
 
@@ -219,8 +219,8 @@ func (r *RecordACondition) GetOrderBy() string {
 	return ""
 }
 
-func queryObjectMap(ctx context.Context, querier cache.IQuerier, ids []string) (map[string]cache.Object, error) {
-	data, err := querier.BatchGet(ctx, ids)
+func queryObjectMap(ctx context.Context, querier cache.IDataSource, ids []string) (map[string]cache.Object, error) {
+	data, err := querier.QueryByIDs(ctx, ids)
 	if err != nil {
 		return nil, err
 	}

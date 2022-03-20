@@ -26,8 +26,8 @@ func (a RecordDEntity) StringID() string {
 func (a RecordDEntity) RelatedIDs() []*cache.RelatedEntity {
 	return []*cache.RelatedEntity{
 		{
-			QuerierName: constant.QuerierE,
-			RelatedIDs:  []string{a.EID},
+			DataSourceName: constant.QuerierE,
+			RelatedIDs:     []string{a.EID},
 		},
 	}
 }
@@ -38,7 +38,7 @@ func (a RecordDEntity) Equal(o cache.Object) bool {
 type RecordDQuerier struct {
 }
 
-func (r *RecordDQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditions) ([]string, error) {
+func (r *RecordDQuerier) ConditionQueryForIDs(ctx context.Context, condition dbo.Conditions, option ...interface{}) ([]string, error) {
 	query, params := condition.GetConditions()
 	paramQuery := strings.Join(query, " and ")
 	recordAList := make([]entity.RecordD, 0)
@@ -52,7 +52,7 @@ func (r *RecordDQuerier) QueryForIDs(ctx context.Context, condition dbo.Conditio
 	}
 	return result, nil
 }
-func (r *RecordDQuerier) BatchGet(ctx context.Context, ids []string) ([]cache.Object, error) {
+func (r *RecordDQuerier) QueryByIDs(ctx context.Context, ids []string, option ...interface{}) ([]cache.Object, error) {
 	condition := &RecordACondition{
 		IDs: ids,
 	}
@@ -91,7 +91,7 @@ func (r *RecordDQuerier) UnmarshalObject(ctx context.Context, jsonData string) (
 	return record, nil
 }
 
-func (r *RecordDQuerier) ID() string {
+func (r *RecordDQuerier) Name() string {
 	return constant.QuerierD
 }
 
@@ -133,11 +133,11 @@ func (r *RecordDCondition) GetOrderBy() string {
 }
 
 var (
-	_recordDQuerier     cache.IQuerier
+	_recordDQuerier     cache.IDataSource
 	_recordDQuerierOnce sync.Once
 )
 
-func GetDQuerier() cache.IQuerier {
+func GetDQuerier() cache.IDataSource {
 	_recordDQuerierOnce.Do(func() {
 		_recordDQuerier = new(RecordDQuerier)
 	})

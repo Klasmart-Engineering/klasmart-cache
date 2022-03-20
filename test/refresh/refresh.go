@@ -6,6 +6,7 @@ import (
 	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/global"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/model"
 	"gitlab.badanamu.com.cn/calmisland/ro"
@@ -41,21 +42,21 @@ var ids = []string{
 }
 
 func initQuerier(ctx context.Context) {
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetAQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetBQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetCQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetDQuerier())
-	cache.GetCacheEngine().AddQuerier(ctx, model.GetEQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetAQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetBQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetCQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetDQuerier())
+	cache.GetCacheEngine().AddDataSource(ctx, model.GetEQuerier())
 }
 
 func test(ctx context.Context) {
 	entities := make([]*model.RecordAEntity, 0)
 	for i := 0; i < 1; i++ {
-		err := cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().ID(), ids, &entities)
+		err := cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().Name(), ids, &entities)
 		if err != nil {
 			panic(err)
 		}
-		err = cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().ID(), ids, &entities)
+		err = cache.GetPassiveCacheRefresher().BatchGet(ctx, model.GetAQuerier().Name(), ids, &entities)
 		if err != nil {
 			panic(err)
 		}
@@ -78,8 +79,10 @@ func main() {
 	initQuerier(ctx)
 
 	test(ctx)
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 4)
 
 	//cache.GetCacheEngine().Clean(ctx, constant.QuerierA, ids)
 	//time.Sleep(time.Second * 2)
+	fmt.Printf("%#v\n", statistics.GetHitRatioRecorder().GetCurrentHitRatio(ctx))
+
 }

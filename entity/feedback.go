@@ -13,7 +13,7 @@ const (
 
 type FeedbackEntry struct {
 	ID              string
-	QuerierName     string
+	DataSourceName  string
 	CurrentFeedback int
 	RecentFeedback  []int
 
@@ -77,7 +77,7 @@ func (f FeedbackEntry) Cn() int {
 
 type FeedbackRecordEntry struct {
 	ID              string
-	QuerierName     string
+	DataSourceName  string
 	CurrentFeedback int
 
 	ExpireTime time.Duration

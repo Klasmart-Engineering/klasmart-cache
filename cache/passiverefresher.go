@@ -3,23 +3,21 @@ package cache
 import (
 	"context"
 	"encoding/json"
-	"github.com/go-redis/redis"
-	"gitlab.badanamu.com.cn/calmisland/common-log/log"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/entity"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/expirecalculator"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
-	"gitlab.badanamu.com.cn/calmisland/ro"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/go-redis/redis"
+	"gitlab.badanamu.com.cn/calmisland/common-log/log"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/entity"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/expirecalculator"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
+	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
+	"gitlab.badanamu.com.cn/calmisland/ro"
 )
 
 const (
-	klcGlobalFeedbackPrefix = "klc:cache:expirecalculator:global"
-	klcGroupFeedbackPrefix  = "klc:cache:expirecalculator:group:"
-	klcIDFeedbackPrefix     = "klc:cache:expirecalculator:id:"
-	klcIDExpirePrefix       = "klc:cache:expire:id:"
-
 	defaultUpdateMaxFrequency = time.Minute * 30
 	defaultUpdateMinFrequency = time.Second * 15
 )
@@ -45,14 +43,16 @@ type fetchObjectDataResponse struct {
 }
 
 type IPassiveRefresher interface {
-	BatchGet(ctx context.Context, querierName string, ids []string, result interface{}) error
+	BatchGet(ctx context.Context, dataSourceName string, ids []string, result interface{}, options ...interface{}) error
 	SetUpdateFrequency(maxFrequency, minFrequency time.Duration)
+	SetExpireCalculator(expireCalculator expirecalculator.IExpireCalculator)
 }
 
 type PassiveRefresher struct {
 	engine             *CacheEngine
 	maxUpdateFrequency time.Duration
 	minUpdateFrequency time.Duration
+	expiredCalculator  expirecalculator.IExpireCalculator
 }
 
 func (c *PassiveRefresher) SetUpdateFrequency(maxFrequency, minFrequency time.Duration) {
@@ -65,43 +65,54 @@ func (c *PassiveRefresher) SetUpdateFrequency(maxFrequency, minFrequency time.Du
 	c.minUpdateFrequency = minFrequency
 }
 
+func (c *PassiveRefresher) SetExpireCalculator(expireCalculator expirecalculator.IExpireCalculator) {
+	c.expiredCalculator = expireCalculator
+}
+
 func (c *PassiveRefresher) BatchGet(ctx context.Context,
-	querierName string,
+	dataSourceName string,
 	ids []string,
-	res interface{}) error {
-	querier, exists := c.engine.querierMap[querierName]
+	res interface{},
+	options ...interface{}) error {
+	querier, exists := c.engine.querierMap[dataSourceName]
 	if !exists {
 		log.Error(ctx, "GetRedis failed",
-			log.String("querierName", querierName),
+			log.String("dataSourceName", dataSourceName),
 			log.Any("querierMap", c.engine.querierMap))
 		return ErrUnknownQuerier
-	}
-	client, err := ro.GetRedis(ctx)
-	if err != nil {
-		log.Error(ctx, "GetRedis failed", log.Err(err))
-		return err
 	}
 	result, err := NewReflectObjectSlice(res)
 	if err != nil {
 		log.Error(ctx, "NewReflectObjectSlice failed", log.Err(err), log.Any("res", res))
 		return err
 	}
+	//close cache
+	if !c.engine.open {
+		return c.engine.doBatchGetFromDB(ctx, dataSourceName, ids, result, options...)
+	}
 
-	objs, err := c.fetchData(ctx, querier, client, ids, result)
+	client, err := ro.GetRedis(ctx)
+	if err != nil {
+		log.Error(ctx, "GetRedis failed", log.Err(err))
+		return err
+	}
+
+	objs, err := c.fetchData(ctx, querier, client, ids, result, options...)
 	if err != nil {
 		log.Error(ctx, "fetchData failed", log.Err(err),
 			log.Strings("ids", ids),
-			log.String("querierName", querierName))
+			log.String("dataSourceName", dataSourceName))
 		return err
 	}
 
 	if len(objs.dbObjects) > 0 {
 		//save cache
-		go c.saveCache(ctx, querier, client, ids, objs)
+		go c.saveCache(ctx, querier, client, objs)
 	}
 
 	return nil
 }
+
 
 func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
 	client *redis.Client,
@@ -139,10 +150,11 @@ func (c *PassiveRefresher) fetchExpiredData(ctx context.Context,
 }
 
 func (c *PassiveRefresher) fetchData(ctx context.Context,
-	querier IQuerier,
+	querier IDataSource,
 	client *redis.Client,
 	ids []string,
-	result *ReflectObjectSlice) (*fetchObjectDataResponse, error) {
+	result *ReflectObjectSlice,
+	options ...interface{}) (*fetchObjectDataResponse, error) {
 
 	//query from cache
 	missingIDs := ids
@@ -156,11 +168,11 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 		}
 	}
 	//check hitIDs and add expiredIDs into missingIDs
-	expiredObjects, err := c.fetchExpiredData(ctx, client, querier.ID(), hitIDs, result)
+	expiredObjects, err := c.fetchExpiredData(ctx, client, querier.Name(), hitIDs, result)
 	if err != nil {
 		log.Error(ctx, "fetchExpiredData failed",
 			log.Err(err),
-			log.String("querier name", querier.ID()),
+			log.String("querier name", querier.Name()),
 			log.Strings("hitIDs", hitIDs))
 		return nil, err
 	}
@@ -172,23 +184,28 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	log.Debug(ctx, "Expired ids",
 		log.Any("expired objs", expiredObjects))
 
+	missingIDsCount := len(missingIDs)
+	allIDsCount := len(ids)
+	go statistics.GetHitRatioRecorder().AddHitRatio(ctx, allIDsCount-missingIDsCount, missingIDsCount)
+
 	//all in cache
-	if len(missingIDs) < 1 {
-		log.Info(ctx, "All in cache")
+	if missingIDsCount < 1 {
+		log.Info(ctx, "All in cache", log.Any("result", result.slice.Interface()))
 		return &fetchObjectDataResponse{
 			dbObjects:      nil,
 			expiredObjects: expiredObjects,
 		}, nil
-	} else if len(missingIDs) == len(ids) {
+	} else if missingIDsCount == allIDsCount {
 		log.Info(ctx, "All missing cache",
 			log.Strings("all ids", ids))
 	} else {
 		log.Info(ctx, "Parts in cache",
 			log.Strings("missing IDs", missingIDs),
-			log.Strings("all ids", ids))
+			log.Strings("all ids", ids), log.Any("result", result.slice.Interface()))
 	}
+
 	//query from database
-	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs)
+	missingObjs, err := c.engine.batchGetFromDB(ctx, querier, missingIDs, options...)
 	if err != nil {
 		log.Error(ctx, "queryForCache failed", log.Err(err), log.Strings("ids", ids))
 		return nil, err
@@ -207,18 +224,17 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	}, nil
 }
 func (c *PassiveRefresher) saveCache(ctx context.Context,
-	querier IQuerier,
+	querier IDataSource,
 	client *redis.Client,
-	ids []string,
 	objs *fetchObjectDataResponse) {
 
 	// maybe needs mutex
 	//idCaches, objMap := c.fetchObjects(ctx, ids, missingObjs)
-	feedbackEntities, err := c.fetchFeedback(ctx, querier.ID(), objs)
+	feedbackEntities, err := c.fetchFeedback(ctx, querier.Name(), objs)
 	if err != nil {
 		log.Error(ctx, "failed to fetch expirecalculator",
 			log.Err(err),
-			log.String("querierName", querier.ID()),
+			log.String("querierName", querier.Name()),
 			log.Any("objs", objs))
 		return
 	}
@@ -226,23 +242,23 @@ func (c *PassiveRefresher) saveCache(ctx context.Context,
 	//calculate expire time
 	feedbackRecord := make([]*entity.FeedbackRecordEntry, len(feedbackEntities))
 	for i := range feedbackEntities {
-		expireTime := expirecalculator.GetExpireCalculator().Calculate(ctx, feedbackEntities[i])
+		expireTime := c.expiredCalculator.Calculate(ctx, feedbackEntities[i])
 		//limit time
 		expireTime = c.expireLimit(expireTime)
 		feedbackRecord[i] = &entity.FeedbackRecordEntry{
 			ID:              feedbackEntities[i].ID,
-			QuerierName:     feedbackEntities[i].QuerierName,
+			DataSourceName:  feedbackEntities[i].DataSourceName,
 			CurrentFeedback: feedbackEntities[i].CurrentFeedback,
 			ExpireTime:      expireTime,
 		}
 
 		if objs.dbObjects[feedbackEntities[i].ID] != nil {
-			c.engine.saveCache(ctx, querier, client, []Object{objs.dbObjects[feedbackEntities[i].ID]}, time.Duration(-1))
+			c.engine.saveCache(ctx, querier, client, []Object{objs.dbObjects[feedbackEntities[i].ID]}, MaxExpireTime)
 		}
 	}
 
 	//save expirecalculator info
-	c.saveFeedback(ctx, client, querier.ID(), feedbackRecord)
+	c.saveFeedback(ctx, client, querier.Name(), feedbackRecord)
 }
 
 func (c *PassiveRefresher) fetchObjects(ctx context.Context,
@@ -280,14 +296,14 @@ func (c *PassiveRefresher) saveFeedback(ctx context.Context,
 	}
 
 	//save global data
-	client.LPush(klcGlobalFeedbackPrefix, globalData...)
+	client.LPush(constant.KlcGlobalFeedbackPrefix, globalData...)
 	//save group data
-	client.LPush(klcGroupFeedbackPrefix+querierName, groupData...)
+	client.LPush(constant.KlcGroupFeedbackPrefix+querierName, groupData...)
 
 	//pending clean key list
 	cleanKeyList := []string{
-		klcGlobalFeedbackPrefix,
-		klcGroupFeedbackPrefix + querierName,
+		constant.KlcGlobalFeedbackPrefix,
+		constant.KlcGroupFeedbackPrefix + querierName,
 	}
 
 	//save id data
@@ -361,13 +377,13 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 			if expiredObj.expiredInfo == nil {
 				expiredObj.expiredInfo = &CacheExpire{
 					ID:             obj.StringID(),
-					ExpireAt:       now.Add(defaultExpire),
-					ExpireDuration: defaultExpire,
+					ExpireAt:       now.Add(DefaultExpire),
+					ExpireDuration: DefaultExpire,
 				}
 			}
 			fbe := &entity.FeedbackEntry{
 				ID:              obj.StringID(),
-				QuerierName:     querierName,
+				DataSourceName:  querierName,
 				CurrentFeedback: entity.FeedbackChanged,
 				RecentFeedback:  idDataMap[obj.StringID()],
 				GlobalFeedback:  globalData,
@@ -387,7 +403,7 @@ func (c *PassiveRefresher) fetchFeedback(ctx context.Context,
 
 		result = append(result, &entity.FeedbackEntry{
 			ID:              obj.StringID(),
-			QuerierName:     querierName,
+			DataSourceName:  querierName,
 			CurrentFeedback: entity.FeedbackChanged,
 			RecentFeedback:  nil,
 			GlobalFeedback:  globalData,
@@ -426,7 +442,8 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 	client *redis.Client,
 	newFeedbacks []*entity.FeedbackRecordEntry) {
 
-	cachePairs := make([]interface{}, len(newFeedbacks)*2)
+	cachePairs := make([]interface{}, 0, len(newFeedbacks)*2)
+	keys := make([]string, len(newFeedbacks))
 	now := time.Now()
 	for i := range newFeedbacks {
 		expireData := &CacheExpire{
@@ -440,12 +457,16 @@ func (c *PassiveRefresher) saveExpireTime(ctx context.Context,
 				log.Err(err))
 			continue
 		}
-		key := idExpirePrefix(newFeedbacks[i].QuerierName, newFeedbacks[i].ID)
+		key := idExpirePrefix(newFeedbacks[i].DataSourceName, newFeedbacks[i].ID)
 		value := jsonData
 		cachePairs = append(cachePairs, key)
 		cachePairs = append(cachePairs, value)
+		keys[i] = key
 	}
 	client.MSet(cachePairs...)
+	for i := range keys {
+		client.Expire(keys[i], MaxExpireTime)
+	}
 }
 
 func (c *PassiveRefresher) fetchExpireTime(ctx context.Context,
@@ -488,7 +509,7 @@ func (c *PassiveRefresher) fetchGlobalGroupFeedback(ctx context.Context,
 	var globalData []int
 	var groupData []int
 
-	globalRaw, err := client.LRange(klcGlobalFeedbackPrefix, 0, entity.FeedbackRecordSize).Result()
+	globalRaw, err := client.LRange(constant.KlcGlobalFeedbackPrefix, 0, entity.FeedbackRecordSize).Result()
 	if err != redis.Nil {
 		if err != nil {
 			log.Error(ctx, "Redis LRange global failed",
@@ -498,7 +519,7 @@ func (c *PassiveRefresher) fetchGlobalGroupFeedback(ctx context.Context,
 		globalData = utils.StringsToInts(ctx, globalRaw)
 	}
 
-	groupRaw, err := client.LRange(klcGroupFeedbackPrefix+querierName, 0, entity.FeedbackRecordSize).Result()
+	groupRaw, err := client.LRange(constant.KlcGroupFeedbackPrefix+querierName, 0, entity.FeedbackRecordSize).Result()
 	if err != redis.Nil {
 		if err != nil {
 			log.Error(ctx, "Redis LRange group failed",
@@ -522,10 +543,10 @@ func (c *PassiveRefresher) expireLimit(expire time.Duration) time.Duration {
 }
 
 func idFeedbackPrefix(querierName string, id string) string {
-	return klcIDFeedbackPrefix + querierName + ":" + id
+	return constant.KlcIDFeedbackPrefix + querierName + ":" + id
 }
 func idExpirePrefix(querierName string, id string) string {
-	return klcIDExpirePrefix + querierName + ":" + id
+	return constant.KlcIDExpirePrefix + querierName + ":" + id
 }
 
 var (
@@ -539,6 +560,7 @@ func GetPassiveCacheRefresher() *PassiveRefresher {
 			engine:             GetCacheEngine(),
 			maxUpdateFrequency: defaultUpdateMaxFrequency,
 			minUpdateFrequency: defaultUpdateMinFrequency,
+			expiredCalculator:  expirecalculator.GetExpireCalculator(),
 		}
 	})
 	return _cachePassiveRefresherEngine
