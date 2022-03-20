@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/jinzhu/gorm"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/constant"
@@ -140,8 +140,8 @@ func clearCache(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	res, _ := client.Keys("klc:cache:*").Result()
-	client.Del(res...)
+	res, _ := client.Keys(ctx, "klc:cache:*").Result()
+	client.Del(ctx, res...)
 }
 
 func calculateAvgTime(ctx context.Context, queryByCache, queryByDB func(ctx context.Context, prefix string)) {
