@@ -151,6 +151,8 @@ github.com/xdg/stringprep v1.0.0/go.mod h1:Jhud4/sHMO4oL310DaZAKk9ZaJ08SJfe+sJh0
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 gitlab.badanamu.com.cn/calmisland/common-cn v0.15.0/go.mod h1:f2lNnpYAKDWxbnS/G0pHVwTs6DwO+fIor9cX5ITsEe8=
+gitlab.badanamu.com.cn/calmisland/common-cn v0.17.0 h1:I4UIOY/L0L1qvvkRa1VFFoAZxK/vyjNRMVcYvP2olCo=
+gitlab.badanamu.com.cn/calmisland/common-cn v0.17.0/go.mod h1:f2lNnpYAKDWxbnS/G0pHVwTs6DwO+fIor9cX5ITsEe8=
 gitlab.badanamu.com.cn/calmisland/common-log v0.2.0/go.mod h1:X3wMC6OgVJ+ZmO4FH+nSzubBTkYuWlCeVVwVgu3rLP4=
 gitlab.badanamu.com.cn/calmisland/common-log v0.2.1 h1:VjEgOLO8Do2+ZGlYoLa3i8BZB6OoZTfmDcjnlIAGpFY=
 gitlab.badanamu.com.cn/calmisland/common-log v0.2.1/go.mod h1:DI9dILGSoq7sXGUtF2lnn4NU3CV7cPW2xMCFJCOQv70=
