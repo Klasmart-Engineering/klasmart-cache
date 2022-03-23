@@ -108,7 +108,10 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 
 	if len(objs.dbObjects) > 0 {
 		//save cache
-		ctx2 := helper.GetBadaCtx(ctx)
+		ctx2, ok := helper.GetBadaCtx(ctx)
+		if !ok {
+			ctx2 = context.Background()
+		}
 		go c.saveCache(ctx2, querier, client, objs)
 	}
 
@@ -187,7 +190,10 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 
 	missingIDsCount := len(missingIDs)
 	allIDsCount := len(ids)
-	ctx2 := helper.GetBadaCtx(ctx)
+	ctx2, ok := helper.GetBadaCtx(ctx)
+	if !ok {
+		ctx2 = context.Background()
+	}
 	go statistics.GetHitRatioRecorder().AddHitRatio(ctx2, allIDsCount-missingIDsCount, missingIDsCount)
 
 	//all in cache
