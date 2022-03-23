@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"gitlab.badanamu.com.cn/calmisland/common-cn/helper"
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/entity"
@@ -107,7 +108,8 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 
 	if len(objs.dbObjects) > 0 {
 		//save cache
-		go c.saveCache(ctx, querier, client, objs)
+		ctx2 := helper.GetBadaCtx(ctx)
+		go c.saveCache(ctx2, querier, client, objs)
 	}
 
 	return nil
@@ -185,7 +187,8 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 
 	missingIDsCount := len(missingIDs)
 	allIDsCount := len(ids)
-	go statistics.GetHitRatioRecorder().AddHitRatio(ctx, allIDsCount-missingIDsCount, missingIDsCount)
+	ctx2 := helper.GetBadaCtx(ctx)
+	go statistics.GetHitRatioRecorder().AddHitRatio(ctx2, allIDsCount-missingIDsCount, missingIDsCount)
 
 	//all in cache
 	if missingIDsCount < 1 {

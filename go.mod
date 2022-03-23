@@ -6,6 +6,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/jinzhu/gorm v1.9.12
 	gitlab.badanamu.com.cn/calmisland/common-log v0.2.1
+	gitlab.badanamu.com.cn/calmisland/common-cn v0.17.0
 	gitlab.badanamu.com.cn/calmisland/dbo v0.3.3
 	gitlab.badanamu.com.cn/calmisland/ro v0.2.0
 	gorm.io/driver/mysql v1.3.2
