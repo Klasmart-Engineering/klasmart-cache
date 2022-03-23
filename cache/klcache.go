@@ -184,7 +184,10 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 	missingIDsCount := len(missingIDs)
 	allIDsCount := len(ids)
 
-	ctx2 := helper.GetBadaCtx(ctx)
+	ctx2, ok := helper.GetBadaCtx(ctx)
+	if !ok {
+		ctx2 = context.Background()
+	}
 	go statistics.GetHitRatioRecorder().AddHitRatio(ctx2, allIDsCount-missingIDsCount, missingIDsCount)
 	//all in cache
 	if missingIDsCount < 1 {
@@ -234,7 +237,10 @@ func (c *CacheEngine) doBatchGet(ctx context.Context,
 	missingObjs, err := c.fetchData(ctx, querierName, ids, result, options...)
 
 	//save cache
-	ctx2 := helper.GetBadaCtx(ctx)
+	ctx2, ok := helper.GetBadaCtx(ctx)
+	if !ok {
+		ctx2 = context.Background()
+	}
 	go c.saveCache(ctx2, querier, client, missingObjs, expireTime)
 	return nil
 }
