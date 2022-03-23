@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"gitlab.badanamu.com.cn/calmisland/common-cn/helper"
 	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"gitlab.badanamu.com.cn/calmisland/dbo"
 	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
@@ -183,7 +184,8 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 	missingIDsCount := len(missingIDs)
 	allIDsCount := len(ids)
 
-	go statistics.GetHitRatioRecorder().AddHitRatio(ctx, allIDsCount-missingIDsCount, missingIDsCount)
+	ctx2 := helper.GetBadaCtx(ctx)
+	go statistics.GetHitRatioRecorder().AddHitRatio(ctx2, allIDsCount-missingIDsCount, missingIDsCount)
 	//all in cache
 	if missingIDsCount < 1 {
 		log.Info(ctx, "All in cache", log.Any("result", result.slice.Interface()))
@@ -232,7 +234,8 @@ func (c *CacheEngine) doBatchGet(ctx context.Context,
 	missingObjs, err := c.fetchData(ctx, querierName, ids, result, options...)
 
 	//save cache
-	go c.saveCache(ctx, querier, client, missingObjs, expireTime)
+	ctx2 := helper.GetBadaCtx(ctx)
+	go c.saveCache(ctx2, querier, client, missingObjs, expireTime)
 	return nil
 }
 
