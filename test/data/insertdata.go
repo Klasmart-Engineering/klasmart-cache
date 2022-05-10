@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/KL-Engineering/kidsloop-cache/test/entity"
 	"github.com/jinzhu/gorm"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/entity"
 	_ "gorm.io/driver/mysql"
 )
 

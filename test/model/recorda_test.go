@@ -3,9 +3,10 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
 	"reflect"
 	"testing"
+
+	"github.com/KL-Engineering/kidsloop-cache/cache"
 )
 
 func newStruct(rda interface{}) {

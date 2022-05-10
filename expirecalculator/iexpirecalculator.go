@@ -2,9 +2,10 @@ package expirecalculator
 
 import (
 	"context"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/entity"
 	"sync"
 	"time"
+
+	"github.com/KL-Engineering/kidsloop-cache/entity"
 )
 
 const (

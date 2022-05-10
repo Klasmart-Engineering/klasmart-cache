@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KL-Engineering/common-log/log"
+	"github.com/KL-Engineering/dbo"
+	gintrace "github.com/KL-Engineering/gin-trace"
+	"github.com/KL-Engineering/kidsloop-cache/constant"
+	"github.com/KL-Engineering/kidsloop-cache/statistics"
+	"github.com/KL-Engineering/kidsloop-cache/utils"
+	"github.com/KL-Engineering/ro"
 	"github.com/go-redis/redis/v8"
-	"gitlab.badanamu.com.cn/calmisland/common-cn/helper"
-	"gitlab.badanamu.com.cn/calmisland/common-log/log"
-	"gitlab.badanamu.com.cn/calmisland/dbo"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/statistics"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/utils"
-	"gitlab.badanamu.com.cn/calmisland/ro"
 )
 
 var (
@@ -185,7 +185,7 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 	allIDsCount := len(ids)
 
 	ctx2 := context.Background()
-	badaCtx, ok := helper.GetBadaCtx(ctx)
+	badaCtx, ok := gintrace.GetBadaCtx(ctx)
 	if ok {
 		badaCtx.EmbedIntoContext(ctx2)
 	}
@@ -239,7 +239,7 @@ func (c *CacheEngine) doBatchGet(ctx context.Context,
 
 	//save cache
 	ctx2 := context.Background()
-	badaCtx, ok := helper.GetBadaCtx(ctx)
+	badaCtx, ok := gintrace.GetBadaCtx(ctx)
 	if ok {
 		badaCtx.EmbedIntoContext(ctx2)
 	}

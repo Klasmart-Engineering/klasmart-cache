@@ -6,13 +6,13 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/KL-Engineering/kidsloop-cache/cache"
+	"github.com/KL-Engineering/kidsloop-cache/test/constant"
+	"github.com/KL-Engineering/kidsloop-cache/test/global"
+	"github.com/KL-Engineering/kidsloop-cache/test/model"
+	"github.com/KL-Engineering/ro"
 	"github.com/go-redis/redis/v8"
 	"github.com/jinzhu/gorm"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/constant"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/global"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/model"
-	"gitlab.badanamu.com.cn/calmisland/ro"
 )
 
 const connStr = "root:Badanamu123456@tcp(127.0.0.1:3306)/test?charset=utf8mb4&parseTime=True&loc=Local"

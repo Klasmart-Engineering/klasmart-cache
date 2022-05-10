@@ -3,13 +3,14 @@ package model
 import (
 	"context"
 	"encoding/json"
-	"gitlab.badanamu.com.cn/calmisland/dbo"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/constant"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/entity"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/test/global"
 	"strings"
 	"sync"
+
+	"github.com/KL-Engineering/dbo"
+	"github.com/KL-Engineering/kidsloop-cache/cache"
+	"github.com/KL-Engineering/kidsloop-cache/test/constant"
+	"github.com/KL-Engineering/kidsloop-cache/test/entity"
+	"github.com/KL-Engineering/kidsloop-cache/test/global"
 )
 
 type RecordCEntity struct {

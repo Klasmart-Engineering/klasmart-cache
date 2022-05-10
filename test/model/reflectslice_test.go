@@ -3,8 +3,9 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/cache"
 	"testing"
+
+	"github.com/KL-Engineering/kidsloop-cache/cache"
 )
 
 func TestAddSlice(t *testing.T) {

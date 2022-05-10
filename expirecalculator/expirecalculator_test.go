@@ -3,11 +3,12 @@ package expirecalculator
 import (
 	"context"
 	"fmt"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/entity"
 	"math"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/KL-Engineering/kidsloop-cache/entity"
 )
 
 var (

@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KL-Engineering/common-log/log"
+	"github.com/KL-Engineering/kidsloop-cache/constant"
+	"github.com/KL-Engineering/ro"
 	"github.com/go-redis/redis/v8"
-	"gitlab.badanamu.com.cn/calmisland/common-log/log"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
-	"gitlab.badanamu.com.cn/calmisland/ro"
 )
 
 const (

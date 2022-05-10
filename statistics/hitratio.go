@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"gitlab.badanamu.com.cn/calmisland/common-log/log"
-	"gitlab.badanamu.com.cn/calmisland/kidsloop-cache/constant"
-	"gitlab.badanamu.com.cn/calmisland/ro"
+	"github.com/KL-Engineering/common-log/log"
+	"github.com/KL-Engineering/kidsloop-cache/constant"
+	"github.com/KL-Engineering/ro"
 )
 
 type HitRatioResponse struct {

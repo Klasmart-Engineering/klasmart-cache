@@ -2,8 +2,9 @@ package utils
 
 import (
 	"context"
-	"gitlab.badanamu.com.cn/calmisland/common-log/log"
 	"strconv"
+
+	"github.com/KL-Engineering/common-log/log"
 )
 
 func StringsToInts(ctx context.Context, str []string) []int {
