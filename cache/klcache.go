@@ -10,11 +10,11 @@ import (
 
 	"github.com/KL-Engineering/common-log/log"
 	"github.com/KL-Engineering/dbo"
-	gintrace "github.com/KL-Engineering/gin-trace"
 	"github.com/KL-Engineering/kidsloop-cache/constant"
 	"github.com/KL-Engineering/kidsloop-cache/statistics"
 	"github.com/KL-Engineering/kidsloop-cache/utils"
 	"github.com/KL-Engineering/ro"
+	"github.com/KL-Engineering/tracecontext"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -185,7 +185,7 @@ func (c *CacheEngine) fetchData(ctx context.Context,
 	allIDsCount := len(ids)
 
 	ctx2 := context.Background()
-	badaCtx, ok := gintrace.GetBadaCtx(ctx)
+	badaCtx, ok := tracecontext.GetTraceContext(ctx)
 	if ok {
 		badaCtx.EmbedIntoContext(ctx2)
 	}
@@ -239,7 +239,7 @@ func (c *CacheEngine) doBatchGet(ctx context.Context,
 
 	//save cache
 	ctx2 := context.Background()
-	badaCtx, ok := gintrace.GetBadaCtx(ctx)
+	badaCtx, ok := tracecontext.GetTraceContext(ctx)
 	if ok {
 		badaCtx.EmbedIntoContext(ctx2)
 	}

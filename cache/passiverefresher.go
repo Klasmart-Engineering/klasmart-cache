@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/KL-Engineering/common-log/log"
-	gintrace "github.com/KL-Engineering/gin-trace"
 	"github.com/KL-Engineering/kidsloop-cache/constant"
 	"github.com/KL-Engineering/kidsloop-cache/entity"
 	"github.com/KL-Engineering/kidsloop-cache/expirecalculator"
 	"github.com/KL-Engineering/kidsloop-cache/statistics"
 	"github.com/KL-Engineering/kidsloop-cache/utils"
 	"github.com/KL-Engineering/ro"
+	"github.com/KL-Engineering/tracecontext"
 	"github.com/go-redis/redis/v8"
 )
 
@@ -109,7 +109,7 @@ func (c *PassiveRefresher) BatchGet(ctx context.Context,
 	if len(objs.dbObjects) > 0 {
 		//save cache
 		ctx2 := context.Background()
-		badaCtx, ok := gintrace.GetBadaCtx(ctx)
+		badaCtx, ok := tracecontext.GetTraceContext(ctx)
 		if ok {
 			badaCtx.EmbedIntoContext(ctx2)
 		}
@@ -193,7 +193,7 @@ func (c *PassiveRefresher) fetchData(ctx context.Context,
 	allIDsCount := len(ids)
 
 	ctx2 := context.Background()
-	badaCtx, ok := gintrace.GetBadaCtx(ctx)
+	badaCtx, ok := tracecontext.GetTraceContext(ctx)
 	if ok {
 		badaCtx.EmbedIntoContext(ctx2)
 	}
