@@ -1,12 +1,12 @@
-module github.com/KL-Engineering/kidsloop-cache
+module github.com/Klasmart-Engineering/klasmart-cache
 
 go 1.18
 
 require (
-	github.com/KL-Engineering/common-log v0.3.0
-	github.com/KL-Engineering/dbo v0.6.0
-	github.com/KL-Engineering/ro v0.4.1
-	github.com/KL-Engineering/tracecontext v0.1.0
+	github.com/Klasmart-Engineering/common-log v0.3.0
+	github.com/Klasmart-Engineering/dbo v0.6.0
+	github.com/Klasmart-Engineering/ro v0.4.1
+	github.com/Klasmart-Engineering/tracecontext v0.1.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/jinzhu/gorm v1.9.12
 	gorm.io/driver/mysql v1.3.2
